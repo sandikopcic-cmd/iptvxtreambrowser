@@ -2,11 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Save, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Save, Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useXtreamAuth } from "@/lib/xtream-auth";
 import { getHidden, setHidden, type PlaylistKind } from "@/lib/playlist-prefs";
 import { xtreamCategories } from "@/lib/xtream.functions";
+
+/** Derive a country/section group from a category name like "UK: Sky Sports". */
+function groupOf(name: string): string {
+  const n = name.trim();
+  const m = n.match(/^([^:|]{1,18}?)\s*[:|]\s*\S/);
+  if (m?.[1]) return m[1].trim().toUpperCase();
+  const dash = n.match(/^([A-Za-z]{2,6})\s*[-–]\s+\S/);
+  if (dash?.[1]) return dash[1].trim().toUpperCase();
+  const first = n.split(/\s+/)[0];
+  if (first && /^[A-Z]{2,6}$/.test(first)) return first;
+  return "OTHER";
+}
+
 
 export const Route = createFileRoute("/editor")({
   head: () => ({
@@ -63,6 +76,24 @@ function EditorPage() {
     return (categories.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q));
   }, [categories.data, search]);
 
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof list>();
+    for (const c of list) {
+      const g = groupOf(c.name);
+      const arr = map.get(g) ?? [];
+      arr.push(c);
+      map.set(g, arr);
+    }
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === "OTHER") return 1;
+      if (b[0] === "OTHER") return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [list]);
+
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const searching = search.trim().length > 0;
+
   const hiddenSet = new Set(hiddenDraft);
   const dirty =
     JSON.stringify([...hiddenDraft].sort()) !==
@@ -72,6 +103,16 @@ function EditorPage() {
     setSaved(false);
     setHiddenDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const setGroupVisible = (ids: string[], visible: boolean) => {
+    setSaved(false);
+    setHiddenDraft((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) (visible ? next.delete(id) : next.add(id));
+      return [...next];
+    });
+  };
+
 
   const showAll = () => {
     setSaved(false);
@@ -147,32 +188,82 @@ function EditorPage() {
           {categories.isError && (
             <p className="p-3 text-sm text-destructive">{(categories.error as Error).message}</p>
           )}
-          {list.map((c) => {
-            const shown = !hiddenSet.has(c.id);
+          {groups.map(([group, items]) => {
+            const ids = items.map((c) => c.id);
+            const shownCount = ids.filter((id) => !hiddenSet.has(id)).length;
+            const expanded = searching || open[group] === true;
             return (
-              <label
-                key={c.id}
-                className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary"
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded border ${
-                    shown ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                  }`}
-                >
-                  {shown && <Check className="h-3 w-3" />}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={shown}
-                  onChange={() => toggle(c.id)}
-                  className="sr-only"
-                />
-                <span className={shown ? "text-foreground" : "text-muted-foreground line-through"}>
-                  {c.name}
-                </span>
-              </label>
+              <div key={group} className="mb-1 rounded-lg border border-border/60">
+                <div className="flex items-center gap-2 rounded-t-lg bg-secondary/40 px-2 py-2">
+                  <button
+                    onClick={() => setOpen((p) => ({ ...p, [group]: !expanded }))}
+                    className="flex flex-1 items-center gap-2 text-left text-sm font-medium"
+                  >
+                    {expanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span>{group}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {shownCount}/{items.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setGroupVisible(ids, true)}
+                    title={`Show all ${group}`}
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setGroupVisible(ids, false)}
+                    title={`Hide all ${group}`}
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <EyeOff className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {expanded && (
+                  <div className="p-1">
+                    {items.map((c) => {
+                      const shown = !hiddenSet.has(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary"
+                        >
+                          <span
+                            className={`flex h-4 w-4 items-center justify-center rounded border ${
+                              shown
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border"
+                            }`}
+                          >
+                            {shown && <Check className="h-3 w-3" />}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={shown}
+                            onChange={() => toggle(c.id)}
+                            className="sr-only"
+                          />
+                          <span
+                            className={
+                              shown ? "text-foreground" : "text-muted-foreground line-through"
+                            }
+                          >
+                            {c.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
+
           {!categories.isLoading && list.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">No categories found.</p>
           )}
