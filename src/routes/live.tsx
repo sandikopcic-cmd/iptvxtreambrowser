@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
 import { liveStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
+import { useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
 import type { LiveChannel } from "@/lib/xtream-types";
 
@@ -41,6 +42,8 @@ function LivePage() {
   const getStreams = useServerFn(xtreamLiveStreams);
   const getEpg = useServerFn(xtreamShortEpg);
 
+  const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "live");
+
   const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LiveChannel | null>(null);
@@ -71,10 +74,12 @@ function LivePage() {
     const q = search.trim().toLowerCase();
     return list.filter(
       (c) =>
-        (category === "all" || c.categoryId === category) &&
+        (category === "all"
+          ? !hiddenSet.has(c.categoryId ?? "")
+          : c.categoryId === category) &&
         (!q || c.name.toLowerCase().includes(q)),
     );
-  }, [channels.data, category, search]);
+  }, [channels.data, category, search, hidden]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_320px_1fr]">
@@ -88,7 +93,7 @@ function LivePage() {
             onClick={() => setCategory("all")}
             label="All channels"
           />
-          {(categories.data ?? []).map((c) => (
+          {(categories.data ?? []).filter((c) => !hiddenSet.has(c.id)).map((c) => (
             <CategoryButton
               key={c.id}
               active={category === c.id}

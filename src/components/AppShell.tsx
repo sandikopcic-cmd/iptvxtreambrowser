@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Radio, Clapperboard, Tv, MonitorPlay } from "lucide-react";
+import { LogOut, Radio, Clapperboard, Tv, MonitorPlay, SlidersHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useXtreamAuth } from "@/lib/xtream-auth";
@@ -8,6 +8,7 @@ const tabs = [
   { to: "/live", label: "Live TV", icon: Radio },
   { to: "/vod", label: "Movies", icon: Clapperboard },
   { to: "/series", label: "Series", icon: Tv },
+  { to: "/editor", label: "Editor", icon: SlidersHorizontal },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {

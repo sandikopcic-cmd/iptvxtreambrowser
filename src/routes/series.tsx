@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
 import { episodeStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
+import { useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamSeriesInfo, xtreamSeriesList } from "@/lib/xtream.functions";
 import type { Episode, SeriesItem } from "@/lib/xtream-types";
 
@@ -34,6 +35,8 @@ function SeriesPage() {
   const getCategories = useServerFn(xtreamCategories);
   const getList = useServerFn(xtreamSeriesList);
   const getInfo = useServerFn(xtreamSeriesInfo);
+
+  const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "series");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -67,10 +70,12 @@ function SeriesPage() {
     const q = search.trim().toLowerCase();
     return items.filter(
       (s) =>
-        (category === "all" || s.categoryId === category) &&
+        (category === "all"
+          ? !hiddenSet.has(s.categoryId ?? "")
+          : s.categoryId === category) &&
         (!q || s.name.toLowerCase().includes(q)),
     );
-  }, [list.data, category, search]);
+  }, [list.data, category, search, hidden]);
 
   const seasons = detail.data?.seasons ?? [];
   const activeSeason = seasons.find((s) => s.season === season) ?? seasons[0];
@@ -185,7 +190,7 @@ function SeriesPage() {
           >
             All series
           </button>
-          {(categories.data ?? []).map((c) => (
+          {(categories.data ?? []).filter((c) => !hiddenSet.has(c.id)).map((c) => (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}
