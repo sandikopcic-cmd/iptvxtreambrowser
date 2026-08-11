@@ -1,11 +1,6 @@
-export type M3uChannel = {
-  id: string;
-  name: string;
-  icon: string | null;
-  group: string;
-  epgChannelId: string | null;
-  url: string;
-};
+import type { M3uChannel } from "./xtream-types";
+
+export type { M3uChannel };
 
 export type M3uImport =
   | { type: "xtream"; server: string; username: string; password: string }

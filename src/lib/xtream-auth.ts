@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { XtreamCreds } from "./xtream-types";
+import type { M3uChannel, XtreamCreds } from "./xtream-types";
 
 const LEGACY_KEY = "xtream.creds";
 const PROFILES_KEY = "xtream.profiles";

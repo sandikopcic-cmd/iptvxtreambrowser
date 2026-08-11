@@ -86,3 +86,12 @@ export type EpgEntry = {
   startTs: number | null;
   endTs: number | null;
 };
+
+export type M3uChannel = {
+  id: string;
+  name: string;
+  icon: string | null;
+  group: string;
+  epgChannelId: string | null;
+  url: string;
+};
