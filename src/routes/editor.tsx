@@ -12,9 +12,9 @@ import { xtreamCategories } from "@/lib/xtream.functions";
 function groupOf(name: string): string {
   const n = name.trim();
   const m = n.match(/^([^:|]{1,18}?)\s*[:|]\s*\S/);
-  if (m) return m[1].trim().toUpperCase();
+  if (m?.[1]) return m[1].trim().toUpperCase();
   const dash = n.match(/^([A-Za-z]{2,6})\s*[-–]\s+\S/);
-  if (dash) return dash[1].trim().toUpperCase();
+  if (dash?.[1]) return dash[1].trim().toUpperCase();
   const first = n.split(/\s+/)[0];
   if (first && /^[A-Z]{2,6}$/.test(first)) return first;
   return "OTHER";
