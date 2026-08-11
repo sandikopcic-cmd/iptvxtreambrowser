@@ -4,7 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { Loader2, MonitorPlay, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
-import { saveCreds, useXtreamAuth } from "@/lib/xtream-auth";
+import { importM3u } from "@/lib/m3u.functions";
+import { saveCreds, saveM3uPlaylist, useXtreamAuth } from "@/lib/xtream-auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,6 +30,9 @@ function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
   const login = useServerFn(xtreamLogin);
+  const loadM3u = useServerFn(importM3u);
+  const [mode, setMode] = useState<"xtream" | "m3u">("xtream");
+  const [m3uUrl, setM3uUrl] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [server, setServer] = useState("");
@@ -44,6 +48,21 @@ function LoginPage() {
       login({ data: input }),
     onSuccess: (_account, input) => {
       saveCreds(input, name);
+      void navigate({ to: "/live" });
+    },
+  });
+
+  const m3uMutation = useMutation({
+    mutationFn: (input: { url: string; name?: string }) => loadM3u({ data: input }),
+    onSuccess: (result, input) => {
+      if (result.type === "xtream") {
+        saveCreds(
+          { server: result.server, username: result.username, password: result.password },
+          name,
+        );
+      } else {
+        saveM3uPlaylist(name || result.name, input.url, result.channels);
+      }
       void navigate({ to: "/live" });
     },
   });
@@ -115,6 +134,10 @@ function LoginPage() {
             className="space-y-4 rounded-xl border border-border bg-card p-6"
             onSubmit={(e) => {
               e.preventDefault();
+              if (mode === "m3u") {
+                m3uMutation.mutate({ url: m3uUrl.trim(), name: name.trim() });
+                return;
+              }
               mutation.mutate({
                 server: server.trim(),
                 username: username.trim(),
@@ -135,6 +158,29 @@ function LoginPage() {
                 </button>
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-1 rounded-md bg-secondary p-1">
+              {(
+                [
+                  ["xtream", "Xtream login"],
+                  ["m3u", "M3U link"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setMode(value)}
+                  className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                    mode === value
+                      ? "bg-background text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="name" className="text-xs font-medium text-muted-foreground">
                 Playlist name (optional)
@@ -147,61 +193,88 @@ function LoginPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="server" className="text-xs font-medium text-muted-foreground">
-                Server URL
-              </label>
-              <input
-                id="server"
-                required
-                value={server}
-                onChange={(e) => setServer(e.target.value)}
-                placeholder="http://example.com:8080"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="username" className="text-xs font-medium text-muted-foreground">
-                Username
-              </label>
-              <input
-                id="username"
-                required
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
-                Password
-              </label>
-              <input
-                id="password"
-                required
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-              />
-            </div>
 
-            {mutation.isError && (
+            {mode === "m3u" ? (
+              <div className="space-y-2">
+                <label htmlFor="m3u" className="text-xs font-medium text-muted-foreground">
+                  M3U playlist URL
+                </label>
+                <input
+                  id="m3u"
+                  required
+                  value={m3uUrl}
+                  onChange={(e) => setM3uUrl(e.target.value)}
+                  placeholder="http://example.com:8080/get.php?username=…&password=…&type=m3u_plus"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Xtream <code>get.php</code> links are detected automatically and unlock movies and
+                  series too. Other M3U links load as a channel list.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label htmlFor="server" className="text-xs font-medium text-muted-foreground">
+                    Server URL
+                  </label>
+                  <input
+                    id="server"
+                    required
+                    value={server}
+                    onChange={(e) => setServer(e.target.value)}
+                    placeholder="http://example.com:8080"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="username" className="text-xs font-medium text-muted-foreground">
+                    Username
+                  </label>
+                  <input
+                    id="username"
+                    required
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    required
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                  />
+                </div>
+              </>
+            )}
+
+            {(mode === "m3u" ? m3uMutation.isError : mutation.isError) && (
               <p className="text-sm text-destructive">
-                {(mutation.error as Error).message || "Login failed."}
+                {((mode === "m3u" ? m3uMutation.error : mutation.error) as Error)?.message ||
+                  "Could not load that playlist."}
               </p>
             )}
 
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || m3uMutation.isPending}
               className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
-              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save & connect
+              {(mutation.isPending || m3uMutation.isPending) && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {mode === "m3u" ? "Load playlist" : "Save & connect"}
             </button>
+
 
             <p className="flex items-start gap-2 pt-2 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />

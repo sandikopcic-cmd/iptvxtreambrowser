@@ -15,6 +15,7 @@ import {
   Search,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { M3uNotice } from "@/components/M3uNotice";
 import { useXtreamAuth } from "@/lib/xtream-auth";
 import {
   getCategoryOrder,
@@ -70,7 +71,8 @@ const kinds: { key: PlaylistKind; label: string }[] = [
 const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 function EditorPage() {
-  const { creds } = useXtreamAuth();
+  const { creds, profile } = useXtreamAuth();
+  const isM3u = profile?.kind === "m3u";
   const getCategories = useServerFn(xtreamCategories);
 
   const [kind, setKind] = useState<PlaylistKind>("live");
@@ -82,7 +84,7 @@ function EditorPage() {
   const categories = useQuery({
     queryKey: [`${kind}-categories`, creds?.username],
     queryFn: () => getCategories({ data: { ...creds!, kind } }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -296,6 +298,8 @@ function EditorPage() {
 
   const total = categories.data?.length ?? 0;
   const visible = total - hiddenDraft.length;
+
+  if (isM3u) return <M3uNotice what="the playlist editor" />;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

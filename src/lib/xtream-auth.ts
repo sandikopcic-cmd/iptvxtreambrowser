@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import type { XtreamCreds } from "./xtream-types";
+import type { M3uChannel, XtreamCreds } from "./xtream-types";
 
 const LEGACY_KEY = "xtream.creds";
 const PROFILES_KEY = "xtream.profiles";
 const ACTIVE_KEY = "xtream.activeProfile";
 
-export type XtreamProfile = XtreamCreds & { id: string; name: string };
+export type XtreamProfile = XtreamCreds & {
+  id: string;
+  name: string;
+  /** "xtream" (default) uses the Xtream API; "m3u" plays a stored M3U channel list. */
+  kind?: "xtream" | "m3u";
+};
 
 type State = { profiles: XtreamProfile[]; activeId: string | null };
 
@@ -98,6 +103,44 @@ export function saveCreds(creds: XtreamCreds, name?: string): XtreamProfile {
   }
   persist({ profiles, activeId: profile.id });
   return profile;
+}
+
+const M3U_CHANNELS_PREFIX = "m3u.channels.";
+
+/** Save an imported M3U playlist (channels kept separately) and make it active. */
+export function saveM3uPlaylist(
+  name: string,
+  sourceUrl: string,
+  channels: M3uChannel[],
+): XtreamProfile {
+  const state = current();
+  const existing = state.profiles.find((p) => p.kind === "m3u" && p.server === sourceUrl);
+  const id = existing?.id ?? newId();
+  const profile: XtreamProfile = {
+    id,
+    kind: "m3u",
+    name: name.trim() || existing?.name || "M3U playlist",
+    server: sourceUrl,
+    username: `m3u:${id}`,
+    password: "",
+  };
+  window.localStorage.setItem(M3U_CHANNELS_PREFIX + id, JSON.stringify(channels));
+  const profiles = existing
+    ? state.profiles.map((p) => (p.id === id ? profile : p))
+    : [...state.profiles, profile];
+  persist({ profiles, activeId: id });
+  return profile;
+}
+
+export function getM3uChannels(id: string): M3uChannel[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(M3U_CHANNELS_PREFIX + id);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as M3uChannel[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function selectProfile(id: string) {

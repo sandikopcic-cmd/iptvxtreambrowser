@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ArrowLeft, Search, Star } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { M3uNotice } from "@/components/M3uNotice";
 import { Player } from "@/components/Player";
 import { episodeStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
@@ -31,7 +32,8 @@ export const Route = createFileRoute("/series")({
 });
 
 function SeriesPage() {
-  const { creds } = useXtreamAuth();
+  const { creds, profile } = useXtreamAuth();
+  const isM3u = profile?.kind === "m3u";
   const getCategories = useServerFn(xtreamCategories);
   const getList = useServerFn(xtreamSeriesList);
   const getInfo = useServerFn(xtreamSeriesInfo);
@@ -48,21 +50,21 @@ function SeriesPage() {
   const categories = useQuery({
     queryKey: ["series-categories", creds?.username],
     queryFn: () => getCategories({ data: { ...creds!, kind: "series" as const } }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const list = useQuery({
     queryKey: ["series-list", creds?.username],
     queryFn: () => getList({ data: creds! }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const detail = useQuery({
     queryKey: ["series-info", creds?.username, selected?.id],
     queryFn: () => getInfo({ data: { ...creds!, seriesId: selected!.id } }),
-    enabled: !!creds && !!selected,
+    enabled: !!creds && !isM3u && !!selected,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -177,6 +179,8 @@ function SeriesPage() {
       </div>
     );
   }
+
+  if (isM3u) return <M3uNotice what="Series" />;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
