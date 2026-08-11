@@ -2,11 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Save, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Save, Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useXtreamAuth } from "@/lib/xtream-auth";
 import { getHidden, setHidden, type PlaylistKind } from "@/lib/playlist-prefs";
 import { xtreamCategories } from "@/lib/xtream.functions";
+
+/** Derive a country/section group from a category name like "UK: Sky Sports". */
+function groupOf(name: string): string {
+  const n = name.trim();
+  const m = n.match(/^([^:|]{1,18}?)\s*[:|]\s*\S/);
+  if (m) return m[1].trim().toUpperCase();
+  const dash = n.match(/^([A-Za-z]{2,6})\s*[-–]\s+\S/);
+  if (dash) return dash[1].trim().toUpperCase();
+  const first = n.split(/\s+/)[0];
+  if (first && /^[A-Z]{2,6}$/.test(first)) return first;
+  return "OTHER";
+}
+
 
 export const Route = createFileRoute("/editor")({
   head: () => ({
