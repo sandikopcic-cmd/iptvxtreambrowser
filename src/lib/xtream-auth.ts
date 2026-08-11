@@ -105,6 +105,44 @@ export function saveCreds(creds: XtreamCreds, name?: string): XtreamProfile {
   return profile;
 }
 
+const M3U_CHANNELS_PREFIX = "m3u.channels.";
+
+/** Save an imported M3U playlist (channels kept separately) and make it active. */
+export function saveM3uPlaylist(
+  name: string,
+  sourceUrl: string,
+  channels: M3uChannel[],
+): XtreamProfile {
+  const state = current();
+  const existing = state.profiles.find((p) => p.kind === "m3u" && p.server === sourceUrl);
+  const id = existing?.id ?? newId();
+  const profile: XtreamProfile = {
+    id,
+    kind: "m3u",
+    name: name.trim() || existing?.name || "M3U playlist",
+    server: sourceUrl,
+    username: `m3u:${id}`,
+    password: "",
+  };
+  window.localStorage.setItem(M3U_CHANNELS_PREFIX + id, JSON.stringify(channels));
+  const profiles = existing
+    ? state.profiles.map((p) => (p.id === id ? profile : p))
+    : [...state.profiles, profile];
+  persist({ profiles, activeId: id });
+  return profile;
+}
+
+export function getM3uChannels(id: string): M3uChannel[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(M3U_CHANNELS_PREFIX + id);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as M3uChannel[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function selectProfile(id: string) {
   const state = current();
   if (!state.profiles.some((p) => p.id === id)) return;
