@@ -4,7 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { Loader2, MonitorPlay, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
-import { saveCreds, useXtreamAuth } from "@/lib/xtream-auth";
+import { importM3u } from "@/lib/m3u.functions";
+import { saveCreds, saveM3uPlaylist, useXtreamAuth } from "@/lib/xtream-auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,6 +30,9 @@ function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
   const login = useServerFn(xtreamLogin);
+  const loadM3u = useServerFn(importM3u);
+  const [mode, setMode] = useState<"xtream" | "m3u">("xtream");
+  const [m3uUrl, setM3uUrl] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [server, setServer] = useState("");
@@ -44,6 +48,21 @@ function LoginPage() {
       login({ data: input }),
     onSuccess: (_account, input) => {
       saveCreds(input, name);
+      void navigate({ to: "/live" });
+    },
+  });
+
+  const m3uMutation = useMutation({
+    mutationFn: (input: { url: string; name?: string }) => loadM3u({ data: input }),
+    onSuccess: (result, input) => {
+      if (result.type === "xtream") {
+        saveCreds(
+          { server: result.server, username: result.username, password: result.password },
+          name,
+        );
+      } else {
+        saveM3uPlaylist(name || result.name, input.url, result.channels);
+      }
       void navigate({ to: "/live" });
     },
   });
