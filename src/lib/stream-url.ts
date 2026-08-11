@@ -20,7 +20,9 @@ const DIRECT_KEY = "xtream.directPlay";
 
 export function isDirectPlay(): boolean {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(DIRECT_KEY) === "1";
+  // Direct is the default: the device talks straight to the IPTV provider,
+  // which is what the provider expects. Proxy is only an opt-in fallback.
+  return window.localStorage.getItem(DIRECT_KEY) !== "0";
 }
 
 export function setDirectPlay(value: boolean) {
