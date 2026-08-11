@@ -10,12 +10,8 @@ import { useXtreamAuth } from "@/lib/xtream-auth";
 import { sortByOrder, useCategoryOrder, useFavorites, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
 import type { LiveChannel } from "@/lib/xtream-types";
+import { epgMs, formatEpgTime, useEpgOffset } from "@/lib/epg-time";
 
-function fmtTime(ts: number | null, fallback: string) {
-  const ms = ts ? ts * 1000 : Date.parse(fallback.replace(" ", "T") + "Z");
-  if (!Number.isFinite(ms)) return fallback;
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 export const Route = createFileRoute("/live")({
   head: () => ({
