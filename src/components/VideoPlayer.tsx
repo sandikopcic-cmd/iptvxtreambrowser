@@ -52,6 +52,22 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       setError(msg);
     };
 
+    // Watchdog: if nothing has started playing after a while, stop the endless
+    // spinner and let the user retry (usually the provider stalled or the
+    // account hit its max simultaneous connections).
+    let watchdog: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      if (cancelled || video.readyState >= 3) return;
+      fail(
+        "The stream did not start. Your provider may be slow or your account may have reached its maximum simultaneous connections — close other players and try again.",
+      );
+    }, 20000);
+    const clearWatchdog = () => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = null;
+    };
+    video.addEventListener("playing", clearWatchdog);
+
+
     /** Plays an MPEG-TS stream through mpegts.js (Media Source Extensions). */
     const playTs = async (url: string) => {
       try {
@@ -120,6 +136,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
 
     return () => {
       cancelled = true;
+      clearWatchdog();
+      video.removeEventListener("playing", clearWatchdog);
       video.removeEventListener("loadeddata", onLoaded);
       video.removeEventListener("error", onVideoError);
       if (hls) hls.destroy();
@@ -127,6 +145,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       video.removeAttribute("src");
       video.load();
     };
+
   }, [src, fallbackSrc, attempt]);
 
   const toggle = () => {
