@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ArrowLeft, Search, Star } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { M3uNotice } from "@/components/M3uNotice";
 import { Player } from "@/components/Player";
 import { movieStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
@@ -31,7 +32,8 @@ export const Route = createFileRoute("/vod")({
 });
 
 function VodPage() {
-  const { creds } = useXtreamAuth();
+  const { creds, profile } = useXtreamAuth();
+  const isM3u = profile?.kind === "m3u";
   const getCategories = useServerFn(xtreamCategories);
   const getStreams = useServerFn(xtreamVodStreams);
   const getInfo = useServerFn(xtreamVodInfo);
