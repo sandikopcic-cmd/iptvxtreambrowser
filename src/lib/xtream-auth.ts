@@ -1,49 +1,139 @@
 import { useCallback, useEffect, useState } from "react";
 import type { XtreamCreds } from "./xtream-types";
 
-const STORAGE_KEY = "xtream.creds";
+const LEGACY_KEY = "xtream.creds";
+const PROFILES_KEY = "xtream.profiles";
+const ACTIVE_KEY = "xtream.activeProfile";
 
-let cache: XtreamCreds | null = null;
-const listeners = new Set<(c: XtreamCreds | null) => void>();
+export type XtreamProfile = XtreamCreds & { id: string; name: string };
 
-function readStorage(): XtreamCreds | null {
-  if (typeof window === "undefined") return null;
+type State = { profiles: XtreamProfile[]; activeId: string | null };
+
+let cache: State | null = null;
+const listeners = new Set<(s: State) => void>();
+
+function newId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function readState(): State {
+  if (typeof window === "undefined") return { profiles: [], activeId: null };
+  let profiles: XtreamProfile[] = [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<XtreamCreds>;
-    if (!parsed.server || !parsed.username || !parsed.password) return null;
-    return { server: parsed.server, username: parsed.username, password: parsed.password };
+    const raw = window.localStorage.getItem(PROFILES_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    if (Array.isArray(parsed)) {
+      profiles = parsed.filter(
+        (p): p is XtreamProfile =>
+          !!p &&
+          typeof p === "object" &&
+          typeof (p as XtreamProfile).server === "string" &&
+          typeof (p as XtreamProfile).username === "string" &&
+          typeof (p as XtreamProfile).password === "string",
+      );
+    }
   } catch {
-    return null;
+    profiles = [];
   }
+
+  // Migrate a single legacy credential set into the profile list.
+  if (profiles.length === 0) {
+    try {
+      const raw = window.localStorage.getItem(LEGACY_KEY);
+      if (raw) {
+        const p = JSON.parse(raw) as Partial<XtreamCreds>;
+        if (p.server && p.username && p.password) {
+          profiles = [
+            {
+              id: newId(),
+              name: p.username,
+              server: p.server,
+              username: p.username,
+              password: p.password,
+            },
+          ];
+          window.localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+        }
+      }
+      window.localStorage.removeItem(LEGACY_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const activeId = window.localStorage.getItem(ACTIVE_KEY);
+  return {
+    profiles,
+    activeId: profiles.some((p) => p.id === activeId) ? activeId : null,
+  };
 }
 
-function emit(creds: XtreamCreds | null) {
-  cache = creds;
-  listeners.forEach((l) => l(creds));
+function persist(state: State) {
+  window.localStorage.setItem(PROFILES_KEY, JSON.stringify(state.profiles));
+  if (state.activeId) window.localStorage.setItem(ACTIVE_KEY, state.activeId);
+  else window.localStorage.removeItem(ACTIVE_KEY);
+  cache = state;
+  listeners.forEach((l) => l(state));
 }
 
-export function saveCreds(creds: XtreamCreds) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
-  emit(creds);
+function current(): State {
+  if (!cache) cache = readState();
+  return cache;
 }
 
+/** Add (or update, when server+username match) a playlist and make it active. */
+export function saveCreds(creds: XtreamCreds, name?: string): XtreamProfile {
+  const state = current();
+  const existing = state.profiles.find(
+    (p) => p.server === creds.server && p.username === creds.username,
+  );
+  let profile: XtreamProfile;
+  let profiles: XtreamProfile[];
+  if (existing) {
+    profile = { ...existing, ...creds, name: name?.trim() || existing.name };
+    profiles = state.profiles.map((p) => (p.id === existing.id ? profile : p));
+  } else {
+    profile = { id: newId(), name: name?.trim() || creds.username, ...creds };
+    profiles = [...state.profiles, profile];
+  }
+  persist({ profiles, activeId: profile.id });
+  return profile;
+}
+
+export function selectProfile(id: string) {
+  const state = current();
+  if (!state.profiles.some((p) => p.id === id)) return;
+  persist({ ...state, activeId: id });
+}
+
+export function removeProfile(id: string) {
+  const state = current();
+  const profiles = state.profiles.filter((p) => p.id !== id);
+  persist({ profiles, activeId: state.activeId === id ? null : state.activeId });
+}
+
+export function renameProfile(id: string, name: string) {
+  const state = current();
+  persist({
+    ...state,
+    profiles: state.profiles.map((p) => (p.id === id ? { ...p, name } : p)),
+  });
+}
+
+/** Deselect the active playlist (keeps saved playlists). */
 export function clearCreds() {
-  window.localStorage.removeItem(STORAGE_KEY);
-  emit(null);
+  persist({ ...current(), activeId: null });
 }
 
 export function useXtreamAuth() {
   const [ready, setReady] = useState(false);
-  const [creds, setCreds] = useState<XtreamCreds | null>(cache);
+  const [state, setState] = useState<State>(cache ?? { profiles: [], activeId: null });
 
   useEffect(() => {
-    const initial = cache ?? readStorage();
-    cache = initial;
-    setCreds(initial);
+    const initial = current();
+    setState(initial);
     setReady(true);
-    const listener = (c: XtreamCreds | null) => setCreds(c);
+    const listener = (s: State) => setState({ ...s });
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
@@ -52,5 +142,16 @@ export function useXtreamAuth() {
 
   const logout = useCallback(() => clearCreds(), []);
 
-  return { creds, ready, logout };
+  const active = state.profiles.find((p) => p.id === state.activeId) ?? null;
+
+  return {
+    creds: active as XtreamCreds | null,
+    profile: active,
+    profiles: state.profiles,
+    ready,
+    logout,
+    selectProfile,
+    removeProfile,
+    renameProfile,
+  };
 }
