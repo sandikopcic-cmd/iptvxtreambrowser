@@ -93,6 +93,15 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       if (fallbackStarted || cancelled) return;
       fallbackStarted = true;
       setLoading(true);
+      clearWatchdog();
+      watchdog = setTimeout(() => {
+        if (cancelled || video.readyState >= 3) return;
+        fail(
+          "The MPEG-TS stream connected but did not produce playable video. Copy the bug report below.",
+          "mpegts-timeout",
+          `No playable media after 15 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
+        );
+      }, 15000);
       try {
         const mod = await import("mpegts.js");
         const mpegts = mod.default ?? mod;
