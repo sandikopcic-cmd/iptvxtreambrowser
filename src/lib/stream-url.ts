@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { XtreamCreds } from "./xtream-types";
 
 export function normalizeServerUrl(server: string): string {
@@ -15,7 +16,24 @@ function toBase64Url(value: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+const DIRECT_KEY = "xtream.directPlay";
+
+export function isDirectPlay(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(DIRECT_KEY) === "1";
+}
+
+export function setDirectPlay(value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DIRECT_KEY, value ? "1" : "0");
+  window.dispatchEvent(new Event("xtream-direct-play"));
+}
+
 export function proxied(absoluteUrl: string): string {
+  // Direct mode: the device connects straight to the IPTV provider, so the
+  // provider sees your own IP instead of the hosting IP (fixes HTTP 458).
+  if (isDirectPlay()) return absoluteUrl;
+
   let format = "";
   try {
     const pathname = new URL(absoluteUrl).pathname;
@@ -49,4 +67,21 @@ export function episodeStreamUrl(creds: XtreamCreds, episodeId: string, ext: str
   return proxied(
     `${base}/series/${encodeURIComponent(creds.username)}/${encodeURIComponent(creds.password)}/${episodeId}.${ext || "mp4"}`,
   );
+}
+
+export function useDirectPlay(): [boolean, (value: boolean) => void] {
+  const [direct, setDirect] = useState(false);
+
+  useEffect(() => {
+    const read = () => setDirect(isDirectPlay());
+    read();
+    window.addEventListener("xtream-direct-play", read);
+    window.addEventListener("storage", read);
+    return () => {
+      window.removeEventListener("xtream-direct-play", read);
+      window.removeEventListener("storage", read);
+    };
+  }, []);
+
+  return [direct, setDirectPlay];
 }
