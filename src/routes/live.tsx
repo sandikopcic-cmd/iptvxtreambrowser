@@ -10,6 +10,12 @@ import { useXtreamAuth } from "@/lib/xtream-auth";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
 import type { LiveChannel } from "@/lib/xtream-types";
 
+function fmtTime(ts: number | null, fallback: string) {
+  const ms = ts ? ts * 1000 : Date.parse(fallback.replace(" ", "T") + "Z");
+  if (!Number.isFinite(ms)) return fallback;
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export const Route = createFileRoute("/live")({
   head: () => ({
     meta: [
@@ -157,7 +163,7 @@ function LivePage() {
                       {e.title}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {e.start} — {e.end}
+                      {fmtTime(e.startTs, e.start)} — {fmtTime(e.endTs, e.end)}
                     </p>
                   </div>
                 ))}
