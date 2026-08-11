@@ -8,6 +8,8 @@ import {
   ChevronRight,
   ChevronUp,
   Eye,
+  GripVertical,
+
   EyeOff,
   Save,
   Search,
@@ -155,6 +157,7 @@ function EditorPage() {
   }, [list, hiddenSet]);
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [drag, setDrag] = useState<{ type: "cat" | "group"; id: string } | null>(null);
   const searching = search.trim().length > 0;
 
 
@@ -177,23 +180,57 @@ function EditorPage() {
     });
   };
 
-  /** Move a single category one slot up/down inside its own group. */
-  const moveCategory = (id: string, dir: -1 | 1) => {
+  /** Split the current order into one contiguous block per group (first-appearance order). */
+  const buildBlocks = (prev: string[]) => {
+    const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
+    const blocks: { key: string; ids: string[] }[] = [];
+    const index = new Map<string, number>();
+    for (const cid of prev) {
+      const g = groupOf(byId.get(cid) ?? "");
+      const at = index.get(g);
+      if (at === undefined) {
+        index.set(g, blocks.length);
+        blocks.push({ key: g, ids: [cid] });
+      } else {
+        blocks[at]!.ids.push(cid);
+      }
+    }
+    return blocks;
+  };
+
+  /** Swap two category ids inside the saved order. */
+  const swapCategories = (a: string, b: string) => {
     setSaved(false);
     setOrderDraft((prev) => {
-      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
-      const group = groupOf(byId.get(id) ?? "");
-      const positions = prev
-        .map((cid, i) => ({ cid, i }))
-        .filter(({ cid }) => groupOf(byId.get(cid) ?? "") === group);
-      const at = positions.findIndex((p) => p.cid === id);
-      const target = positions[at + dir];
-      if (at < 0 || !target) return prev;
+      const ia = prev.indexOf(a);
+      const ib = prev.indexOf(b);
+      if (ia < 0 || ib < 0) return prev;
       const next = [...prev];
-      const from = positions[at]!.i;
-      next[from] = target.cid;
-      next[target.i] = id;
+      next[ia] = b;
+      next[ib] = a;
       return next;
+    });
+  };
+
+  /** Move a category one slot up/down relative to what is displayed in its group. */
+  const moveCategory = (id: string, dir: -1 | 1, siblings: string[]) => {
+    const at = siblings.indexOf(id);
+    const target = siblings[at + dir];
+    if (at < 0 || !target) return;
+    swapCategories(id, target);
+  };
+
+  /** Drag a category and drop it onto another one (inserts at that spot). */
+  const dropCategory = (dragId: string, overId: string) => {
+    if (dragId === overId) return;
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const without = prev.filter((x) => x !== dragId);
+      const at = without.indexOf(overId);
+      if (at < 0) return prev;
+      const before = prev.indexOf(dragId) > prev.indexOf(overId);
+      without.splice(before ? at : at + 1, 0, dragId);
+      return without;
     });
   };
 
@@ -201,14 +238,7 @@ function EditorPage() {
   const moveGroup = (group: string, dir: -1 | 1) => {
     setSaved(false);
     setOrderDraft((prev) => {
-      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
-      const blocks: { key: string; ids: string[] }[] = [];
-      for (const cid of prev) {
-        const g = groupOf(byId.get(cid) ?? "");
-        const last = blocks[blocks.length - 1];
-        if (last && last.key === g) last.ids.push(cid);
-        else blocks.push({ key: g, ids: [cid] });
-      }
+      const blocks = buildBlocks(prev);
       const at = blocks.findIndex((b) => b.key === group);
       const swapWith = at + dir;
       if (at < 0 || swapWith < 0 || swapWith >= blocks.length) return prev;
@@ -217,6 +247,23 @@ function EditorPage() {
       return next.flatMap((b) => b.ids);
     });
   };
+
+  /** Drag a group header and drop it onto another group. */
+  const dropGroup = (dragKey: string, overKey: string) => {
+    if (dragKey === overKey) return;
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const blocks = buildBlocks(prev);
+      const from = blocks.findIndex((b) => b.key === dragKey);
+      const to = blocks.findIndex((b) => b.key === overKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...blocks];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next.flatMap((b) => b.ids);
+    });
+  };
+
 
   const showAll = () => {
     setSaved(false);
@@ -255,8 +302,8 @@ function EditorPage() {
       <div>
         <h1 className="text-2xl font-semibold">Playlist editor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Uncheck the categories you don't want to see and use the arrows to reorder them. Your
-          choice is saved on this device and applied everywhere in the player.
+          Uncheck the categories you don't want to see, then reorder with the arrows or by dragging
+          the grip handle. Your choice is saved on this device and applied everywhere in the player.
         </p>
       </div>
 
@@ -322,8 +369,33 @@ function EditorPage() {
             const shownCount = ids.filter((id) => !hiddenSet.has(id)).length;
             const expanded = searching || open[group] === true;
             return (
-              <div key={group} className="mb-1 rounded-lg border border-border/60">
+              <div
+                key={group}
+                className={`mb-1 rounded-lg border border-border/60 ${
+                  drag?.type === "group" && drag.id === group ? "opacity-50" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (drag?.type === "group") e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (drag?.type !== "group") return;
+                  e.preventDefault();
+                  dropGroup(drag.id, group);
+                  setDrag(null);
+                }}
+              >
                 <div className="flex items-center gap-2 rounded-t-lg bg-secondary/40 px-2 py-2">
+                  {!searching && (
+                    <span
+                      draggable
+                      onDragStart={() => setDrag({ type: "group", id: group })}
+                      onDragEnd={() => setDrag(null)}
+                      title={`Drag ${group}`}
+                      className="shrink-0 cursor-grab p-1 text-muted-foreground active:cursor-grabbing"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => setOpen((p) => ({ ...p, [group]: !expanded }))}
@@ -371,8 +443,34 @@ function EditorPage() {
                       return (
                         <div
                           key={c.id}
-                          className="flex items-center gap-1 rounded-md pr-1 hover:bg-secondary"
+                          onDragOver={(e) => {
+                            if (drag?.type === "cat") e.preventDefault();
+                          }}
+                          onDrop={(e) => {
+                            if (drag?.type !== "cat") return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dropCategory(drag.id, c.id);
+                            setDrag(null);
+                          }}
+                          className={`flex items-center gap-1 rounded-md pr-1 hover:bg-secondary ${
+                            drag?.type === "cat" && drag.id === c.id ? "opacity-50" : ""
+                          }`}
                         >
+                          {!searching && (
+                            <span
+                              draggable
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                setDrag({ type: "cat", id: c.id });
+                              }}
+                              onDragEnd={() => setDrag(null)}
+                              title="Drag to reorder"
+                              className="shrink-0 cursor-grab p-1 text-muted-foreground active:cursor-grabbing"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+                          )}
                           <button
                             type="button"
                             role="checkbox"
@@ -401,12 +499,12 @@ function EditorPage() {
                             <>
                               <IconButton
                                 title="Move up"
-                                onClick={() => moveCategory(c.id, -1)}
+                                onClick={() => moveCategory(c.id, -1, ids)}
                                 icon={<ChevronUp className="h-3.5 w-3.5" />}
                               />
                               <IconButton
                                 title="Move down"
-                                onClick={() => moveCategory(c.id, 1)}
+                                onClick={() => moveCategory(c.id, 1, ids)}
                                 icon={<ChevronDown className="h-3.5 w-3.5" />}
                               />
                             </>
@@ -419,6 +517,7 @@ function EditorPage() {
               </div>
             );
           })}
+
 
           {!categories.isLoading && list.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">No categories found.</p>
