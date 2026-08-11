@@ -97,9 +97,12 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       clearWatchdog();
       watchdog = setTimeout(() => {
         if (cancelled || video.readyState >= 3) return;
+        const publishedRelayRejected = hlsFailure.includes("response=458");
         fail(
-          "The MPEG-TS stream connected but did not produce playable video. Copy the bug report below.",
-          "mpegts-timeout",
+          publishedRelayRejected
+            ? "Your IPTV provider rejected the published site's stream connection (HTTP 458). The Lovable preview uses a different network route, which is why it can still play."
+            : "The MPEG-TS stream connected but did not produce playable video. Copy the bug report below.",
+          publishedRelayRejected ? "provider-rejected-relay" : "mpegts-timeout",
           `${hlsFailure ? `HLS failed first (${hlsFailure}); ` : ""}No playable TS media after 20 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
         );
       }, 20000);
