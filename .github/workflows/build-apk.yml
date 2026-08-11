@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # To ti omogoči, da zagon sprožiš ročno na gumb
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,14 +9,14 @@ jobs:
 
     steps:
       - name: Checkout koda
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Nastavitev Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Nastavitev Bun (ker projekt uporablja bun.lock)
+      - name: Nastavitev Bun
         uses: oven-sh/setup-bun@v1
 
       - name: Namestitev odvisnosti
@@ -25,8 +25,8 @@ jobs:
       - name: Prevajanje spletne aplikacije (Build)
         run: bun run build
 
-      - name: Nastavitev Java JDK (potrebno za Android)
-        uses: actions/setup-java@v3
+      - name: Nastavitev Java JDK
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -43,7 +43,7 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Naloži ustvarjen APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Xtream-Player-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
