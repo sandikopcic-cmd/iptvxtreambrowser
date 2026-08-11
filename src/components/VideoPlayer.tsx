@@ -205,6 +205,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
           { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
         );
         tsPlayer = player;
+        tsPlayerRef.current = player;
+        engineRef.current = "mpegts.js (MSE)";
         player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: unknown) => {
           fail(
             "The stream reached the player but its video or audio codec is not browser-compatible.",
@@ -225,6 +227,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       if (fallbackSrc && !fallbackStarted) {
         hls?.destroy();
         hls = null;
+        hlsRef.current = null;
         void playTs(fallbackSrc);
         return;
       }
@@ -245,6 +248,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         levelLoadingMaxRetry: 2,
         fragLoadingMaxRetry: 2,
       });
+      hlsRef.current = hls;
+      engineRef.current = "hls.js";
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_e, data) => {
@@ -257,10 +262,12 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         hlsFailure = `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`;
         hls?.destroy();
         hls = null;
+        hlsRef.current = null;
         if (fallbackSrc) void playTs(fallbackSrc);
         else fail("This stream could not be played in the browser.", "hls", `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`);
       });
     } else {
+      engineRef.current = "native";
       video.src = src;
     }
 
@@ -284,6 +291,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       video.removeEventListener("error", onVideoError);
       if (hls) hls.destroy();
       if (tsPlayer) tsPlayer.destroy();
+      hlsRef.current = null;
+      tsPlayerRef.current = null;
       video.removeAttribute("src");
       video.load();
     };
