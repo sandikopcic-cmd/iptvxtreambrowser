@@ -27,8 +27,19 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
     setError(null);
     setLoading(true);
 
-    const isHls = src.includes(".m3u8") || src.includes("%2Em3u8");
-    const isTs = /\.(ts|m2ts|mpegts)(\?|$)/i.test(decodeURIComponent(src));
+    const streamFormat = new URL(src, window.location.origin).searchParams.get("format")?.toLowerCase();
+    // Proxied URLs contain a base64 target, so the original file extension is
+    // carried separately. A live fallback also unambiguously means HLS first.
+    const isHls =
+      streamFormat === "m3u8" ||
+      Boolean(fallbackSrc) ||
+      src.includes(".m3u8") ||
+      src.includes("%2Em3u8");
+    const isTs =
+      streamFormat === "ts" ||
+      streamFormat === "m2ts" ||
+      streamFormat === "mpegts" ||
+      /\.(ts|m2ts|mpegts)(\?|$)/i.test(decodeURIComponent(src));
     let hls: Hls | null = null;
     let tsPlayer: { destroy: () => void } | null = null;
     let cancelled = false;
@@ -56,9 +67,11 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
           { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
         );
         tsPlayer = player;
-        player.on(mpegts.Events.ERROR, () =>
-          fail("This stream could not be played. Your provider may be offline or blocking playback."),
-        );
+        player.on(mpegts.Events.ERROR, () => {
+          fail(
+            "The stream reached the player but its video or audio codec is not browser-compatible.",
+          );
+        });
         player.attachMediaElement(video);
         player.load();
         void Promise.resolve(player.play()).catch(() => undefined);
@@ -70,7 +83,13 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
     if (isTs) {
       void playTs(src);
     } else if (isHls && Hls.isSupported()) {
-      hls = new Hls({ lowLatencyMode: false, enableWorker: true });
+      hls = new Hls({
+        lowLatencyMode: false,
+        enableWorker: true,
+        manifestLoadingMaxRetry: 2,
+        levelLoadingMaxRetry: 2,
+        fragLoadingMaxRetry: 2,
+      });
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_e, data) => {
