@@ -10,12 +10,8 @@ import { useXtreamAuth } from "@/lib/xtream-auth";
 import { sortByOrder, useCategoryOrder, useFavorites, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
 import type { LiveChannel } from "@/lib/xtream-types";
+import { epgMs, formatEpgTime, useEpgOffset } from "@/lib/epg-time";
 
-function fmtTime(ts: number | null, fallback: string) {
-  const ms = ts ? ts * 1000 : Date.parse(fallback.replace(" ", "T") + "Z");
-  if (!Number.isFinite(ms)) return fallback;
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 export const Route = createFileRoute("/live")({
   head: () => ({
@@ -49,6 +45,8 @@ function LivePage() {
   const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LiveChannel | null>(null);
+  const [epgOffset, setEpgOffset] = useEpgOffset();
+
 
   const categories = useQuery({
     queryKey: ["live-categories", creds?.username],
@@ -250,21 +248,48 @@ function LivePage() {
                 </button>
               </div>
               <div className="mt-3 space-y-3">
-                {(epg.data ?? []).slice(0, 3).map((e, i) => (
-                  <div key={`${e.start}-${i}`} className="text-sm">
-                    <p className="font-medium">
-                      {i === 0 ? "Now: " : ""}
-                      {e.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {fmtTime(e.startTs, e.start)} — {fmtTime(e.endTs, e.end)}
-                    </p>
-                  </div>
-                ))}
+                {(epg.data ?? []).slice(0, 4).map((e, i) => {
+                  const start = epgMs(e.startTs, e.start);
+                  const end = epgMs(e.endTs, e.end);
+                  const shifted = epgOffset * 3600_000;
+                  const now = Date.now();
+                  const live =
+                    start !== null && end !== null && now >= start + shifted && now < end + shifted;
+                  return (
+                    <div key={`${e.start}-${i}`} className="text-sm">
+                      <p className="font-medium">
+                        {live ? "Now: " : ""}
+                        {e.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatEpgTime(start, epgOffset)} — {formatEpgTime(end, epgOffset)}
+                      </p>
+                    </div>
+                  );
+                })}
                 {epg.data && epg.data.length === 0 && (
                   <p className="text-sm text-muted-foreground">No programme guide available.</p>
                 )}
+                {epg.data && epg.data.length > 0 && (
+                  <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                    <label htmlFor="epg-offset">Guide time shift</label>
+                    <select
+                      id="epg-offset"
+                      value={epgOffset}
+                      onChange={(ev) => setEpgOffset(Number(ev.target.value))}
+                      className="rounded-md border border-input bg-background px-2 py-1 text-foreground"
+                    >
+                      {[-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6].map((h) => (
+                        <option key={h} value={h}>
+                          {h === 0 ? "None" : `${h > 0 ? "+" : ""}${h} h`}
+                        </option>
+                      ))}
+                    </select>
+                    <span>times shown in your local timezone</span>
+                  </div>
+                )}
               </div>
+
             </div>
           </>
         ) : (
