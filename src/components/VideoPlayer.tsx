@@ -136,6 +136,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
 
     return () => {
       cancelled = true;
+      clearWatchdog();
+      video.removeEventListener("playing", clearWatchdog);
       video.removeEventListener("loadeddata", onLoaded);
       video.removeEventListener("error", onVideoError);
       if (hls) hls.destroy();
@@ -143,6 +145,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       video.removeAttribute("src");
       video.load();
     };
+
   }, [src, fallbackSrc, attempt]);
 
   const toggle = () => {
