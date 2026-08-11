@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Radio, Clapperboard, Tv, MonitorPlay, SlidersHorizontal } from "lucide-react";
+import { LogOut, Radio, Clapperboard, Tv, MonitorPlay, SlidersHorizontal, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useXtreamAuth } from "@/lib/xtream-auth";
+import { useCloudSync } from "@/lib/cloud-sync";
 
 const tabs = [
   { to: "/live", label: "Live TV", icon: Radio },
@@ -14,6 +15,7 @@ const tabs = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { creds, profile, profiles, ready, logout, selectProfile } = useXtreamAuth();
   const navigate = useNavigate();
+  const { session } = useCloudSync();
 
   useEffect(() => {
     if (ready && !creds) void navigate({ to: "/" });
@@ -67,6 +69,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {profile?.name ?? creds.username}
               </span>
             )}
+            <Link
+              to="/account"
+              title={session ? `Signed in as ${session.user.email}` : "Sign in to sync playlists"}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <UserRound className="h-3.5 w-3.5" />
+              {session ? "Account" : "Sign in"}
+            </Link>
             <button
               onClick={logout}
               className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
