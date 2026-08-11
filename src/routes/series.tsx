@@ -36,7 +36,7 @@ function SeriesPage() {
   const getList = useServerFn(xtreamSeriesList);
   const getInfo = useServerFn(xtreamSeriesInfo);
 
-  const { hiddenSet } = useHiddenCategories(creds?.username, "series");
+  const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "series");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");

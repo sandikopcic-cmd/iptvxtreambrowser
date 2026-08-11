@@ -36,7 +36,7 @@ function VodPage() {
   const getStreams = useServerFn(xtreamVodStreams);
   const getInfo = useServerFn(xtreamVodInfo);
 
-  const { hiddenSet } = useHiddenCategories(creds?.username, "vod");
+  const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "vod");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");

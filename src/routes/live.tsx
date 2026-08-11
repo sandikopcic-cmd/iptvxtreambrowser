@@ -42,7 +42,7 @@ function LivePage() {
   const getStreams = useServerFn(xtreamLiveStreams);
   const getEpg = useServerFn(xtreamShortEpg);
 
-  const { hiddenSet } = useHiddenCategories(creds?.username, "live");
+  const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "live");
 
   const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
