@@ -19,9 +19,35 @@ type PlaybackReport = {
   online: boolean;
 };
 
+type StreamStats = {
+  engine: string;
+  resolution: string;
+  quality: string;
+  fps: string;
+  bitrate: string;
+  codecs: string;
+  buffer: string;
+  dropped: string;
+};
+
+/** Labels a video height with the common broadcast quality name. */
+function qualityLabel(height: number) {
+  if (!height) return "unknown";
+  if (height >= 2000) return "4K";
+  if (height >= 1400) return "1440p";
+  if (height >= 1000) return "1080p (Full HD)";
+  if (height >= 700) return "720p (HD)";
+  if (height >= 540) return "576p (SD)";
+  if (height >= 460) return "480p (SD)";
+  return `${height}p`;
+}
+
 export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const tsPlayerRef = useRef<any>(null);
+  const engineRef = useRef<string>("native");
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -30,6 +56,66 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
   const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [report, setReport] = useState<PlaybackReport | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [stats, setStats] = useState<StreamStats | null>(null);
+
+  const readStats = useCallback((): StreamStats | null => {
+    const video = videoRef.current;
+    if (!video) return null;
+    const height = video.videoHeight;
+    const width = video.videoWidth;
+
+    let bitrate = "unknown";
+    let codecs = "unknown";
+    let fps = "unknown";
+
+    const hls = hlsRef.current;
+    if (hls) {
+      const level = hls.levels?.[hls.currentLevel] ?? hls.levels?.[0];
+      if (level) {
+        if (level.bitrate) bitrate = `${Math.round(level.bitrate / 1000)} kbps`;
+        if (level.codecSet || level.attrs?.CODECS) codecs = level.codecSet || String(level.attrs?.CODECS);
+        if (level.frameRate) fps = `${Math.round(level.frameRate)} fps`;
+      }
+    }
+
+    const ts = tsPlayerRef.current;
+    if (ts) {
+      const info = ts.statisticsInfo ?? {};
+      if (typeof info.speed === "number" && info.speed > 0) bitrate = `${Math.round(info.speed * 8)} kbps`;
+      const media = ts.mediaInfo ?? {};
+      if (media.videoCodec || media.audioCodec)
+        codecs = [media.videoCodec, media.audioCodec].filter(Boolean).join(", ");
+      if (media.fps) fps = `${Math.round(media.fps)} fps`;
+      if (typeof info.decodedFrames === "number" && typeof info.droppedFrames !== "number") {
+        // decoded frame counters only; nothing extra to report
+      }
+    }
+
+    const quality = video.getVideoPlaybackQuality?.();
+    const buffered = video.buffered.length
+      ? Math.max(0, video.buffered.end(video.buffered.length - 1) - video.currentTime)
+      : 0;
+
+    return {
+      engine: engineRef.current,
+      resolution: width && height ? `${width} × ${height}` : "unknown",
+      quality: qualityLabel(height),
+      fps,
+      bitrate,
+      codecs,
+      buffer: `${buffered.toFixed(1)} s`,
+      dropped: quality ? `${quality.droppedVideoFrames} / ${quality.totalVideoFrames}` : "n/a",
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showInfo) return;
+    setStats(readStats());
+    const id = setInterval(() => setStats(readStats()), 1000);
+    return () => clearInterval(id);
+  }, [showInfo, readStats, src, attempt]);
+
 
   useEffect(() => {
     const video = videoRef.current;
