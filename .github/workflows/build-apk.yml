@@ -33,7 +33,9 @@ jobs:
 
       - name: Capacitor Sync (Priprava Android kode)
         run: |
+          mkdir -p dist/client
           npx cap add android || true
+          mkdir -p android/app/src/main/assets
           npx cap sync android
 
       - name: Gradnja APK datoteke z Gradle
