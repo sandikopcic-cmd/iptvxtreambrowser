@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
 import { episodeStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
-import { useHiddenCategories } from "@/lib/playlist-prefs";
+import { sortByOrder, useCategoryOrder, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamSeriesInfo, xtreamSeriesList } from "@/lib/xtream.functions";
 import type { Episode, SeriesItem } from "@/lib/xtream-types";
 
@@ -37,6 +37,7 @@ function SeriesPage() {
   const getInfo = useServerFn(xtreamSeriesInfo);
 
   const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "series");
+  const { order } = useCategoryOrder(creds?.username, "series");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -190,7 +191,10 @@ function SeriesPage() {
           >
             All series
           </button>
-          {(categories.data ?? []).filter((c) => !hiddenSet.has(c.id)).map((c) => (
+          {sortByOrder(
+            (categories.data ?? []).filter((c) => !hiddenSet.has(c.id)),
+            order,
+          ).map((c) => (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}
