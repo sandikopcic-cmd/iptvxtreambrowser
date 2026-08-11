@@ -5,7 +5,12 @@ const LEGACY_KEY = "xtream.creds";
 const PROFILES_KEY = "xtream.profiles";
 const ACTIVE_KEY = "xtream.activeProfile";
 
-export type XtreamProfile = XtreamCreds & { id: string; name: string };
+export type XtreamProfile = XtreamCreds & {
+  id: string;
+  name: string;
+  /** "xtream" (default) uses the Xtream API; "m3u" plays a stored M3U channel list. */
+  kind?: "xtream" | "m3u";
+};
 
 type State = { profiles: XtreamProfile[]; activeId: string | null };
 
