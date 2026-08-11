@@ -33,6 +33,7 @@ export const Route = createFileRoute("/account")({
 function AccountPage() {
   const { session, ready, status } = useCloudSync();
   const navigate = useNavigate();
+  const nativeShell = useNativeShell();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
