@@ -157,6 +157,7 @@ function EditorPage() {
   }, [list, hiddenSet]);
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [drag, setDrag] = useState<{ type: "cat" | "group"; id: string } | null>(null);
   const searching = search.trim().length > 0;
 
 
