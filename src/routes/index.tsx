@@ -135,7 +135,7 @@ function LoginPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (mode === "m3u") {
-                m3uMutation.mutate({ url: m3uUrl.trim(), name: name.trim() || undefined });
+                m3uMutation.mutate({ url: m3uUrl.trim(), name: name.trim() });
                 return;
               }
               mutation.mutate({
