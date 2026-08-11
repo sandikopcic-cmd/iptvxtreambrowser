@@ -366,8 +366,33 @@ function EditorPage() {
             const shownCount = ids.filter((id) => !hiddenSet.has(id)).length;
             const expanded = searching || open[group] === true;
             return (
-              <div key={group} className="mb-1 rounded-lg border border-border/60">
+              <div
+                key={group}
+                className={`mb-1 rounded-lg border border-border/60 ${
+                  drag?.type === "group" && drag.id === group ? "opacity-50" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (drag?.type === "group") e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (drag?.type !== "group") return;
+                  e.preventDefault();
+                  dropGroup(drag.id, group);
+                  setDrag(null);
+                }}
+              >
                 <div className="flex items-center gap-2 rounded-t-lg bg-secondary/40 px-2 py-2">
+                  {!searching && (
+                    <span
+                      draggable
+                      onDragStart={() => setDrag({ type: "group", id: group })}
+                      onDragEnd={() => setDrag(null)}
+                      title={`Drag ${group}`}
+                      className="shrink-0 cursor-grab p-1 text-muted-foreground active:cursor-grabbing"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => setOpen((p) => ({ ...p, [group]: !expanded }))}
@@ -415,8 +440,34 @@ function EditorPage() {
                       return (
                         <div
                           key={c.id}
-                          className="flex items-center gap-1 rounded-md pr-1 hover:bg-secondary"
+                          onDragOver={(e) => {
+                            if (drag?.type === "cat") e.preventDefault();
+                          }}
+                          onDrop={(e) => {
+                            if (drag?.type !== "cat") return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dropCategory(drag.id, c.id);
+                            setDrag(null);
+                          }}
+                          className={`flex items-center gap-1 rounded-md pr-1 hover:bg-secondary ${
+                            drag?.type === "cat" && drag.id === c.id ? "opacity-50" : ""
+                          }`}
                         >
+                          {!searching && (
+                            <span
+                              draggable
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                setDrag({ type: "cat", id: c.id });
+                              }}
+                              onDragEnd={() => setDrag(null)}
+                              title="Drag to reorder"
+                              className="shrink-0 cursor-grab p-1 text-muted-foreground active:cursor-grabbing"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+                          )}
                           <button
                             type="button"
                             role="checkbox"
@@ -445,12 +496,12 @@ function EditorPage() {
                             <>
                               <IconButton
                                 title="Move up"
-                                onClick={() => moveCategory(c.id, -1)}
+                                onClick={() => moveCategory(c.id, -1, ids)}
                                 icon={<ChevronUp className="h-3.5 w-3.5" />}
                               />
                               <IconButton
                                 title="Move down"
-                                onClick={() => moveCategory(c.id, 1)}
+                                onClick={() => moveCategory(c.id, 1, ids)}
                                 icon={<ChevronDown className="h-3.5 w-3.5" />}
                               />
                             </>
@@ -463,6 +514,7 @@ function EditorPage() {
               </div>
             );
           })}
+
 
           {!categories.isLoading && list.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">No categories found.</p>
