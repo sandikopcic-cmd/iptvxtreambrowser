@@ -371,6 +371,40 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         </div>
       )}
 
+      {showInfo && (
+        <div className="absolute right-3 top-3 w-64 rounded-lg border border-border bg-background/90 p-3 text-xs backdrop-blur">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold text-foreground">Stream info</span>
+            <button
+              onClick={() => setShowInfo(false)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Close stream info"
+            >
+              ✕
+            </button>
+          </div>
+          <dl className="space-y-1">
+            {[
+              ["Quality", stats?.quality],
+              ["Resolution", stats?.resolution],
+              ["Bitrate", stats?.bitrate],
+              ["Frame rate", stats?.fps],
+              ["Codecs", stats?.codecs],
+              ["Buffer", stats?.buffer],
+              ["Dropped frames", stats?.dropped],
+              ["Engine", stats?.engine],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-start justify-between gap-2">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="max-w-[60%] truncate text-right font-mono text-foreground" title={String(value ?? "")}>
+                  {value || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
         <button
           onClick={toggle}
@@ -406,6 +440,14 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         />
         <span className="truncate text-xs text-muted-foreground">{title}</span>
         <div className="ml-auto flex items-center gap-3">
+          <button
+            aria-label="Stream info"
+            aria-pressed={showInfo}
+            onClick={() => setShowInfo((v) => !v)}
+            className={`transition-colors hover:text-primary ${showInfo ? "text-primary" : "text-foreground"}`}
+          >
+            <Info className="h-5 w-5" />
+          </button>
           <button
             aria-label="Picture in picture"
             onClick={() => {
