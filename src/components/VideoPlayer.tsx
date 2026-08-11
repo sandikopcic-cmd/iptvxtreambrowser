@@ -1,6 +1,7 @@
 import Hls from "hls.js";
-import { Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
+import { Bug, Check, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type Props = {
   src: string;
@@ -8,6 +9,14 @@ type Props = {
   fallbackSrc?: string;
   title?: string;
   poster?: string | null;
+};
+
+type PlaybackReport = {
+  stage: string;
+  format: string;
+  detail: string;
+  browser: string;
+  online: boolean;
 };
 
 export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
@@ -19,6 +28,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [report, setReport] = useState<PlaybackReport | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -26,6 +37,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
 
     setError(null);
     setLoading(true);
+    setReport(null);
+    setCopied(false);
 
     const streamFormat = new URL(src, window.location.origin).searchParams.get("format")?.toLowerCase();
     // Proxied URLs contain a base64 target, so the original file extension is
@@ -44,23 +57,30 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
     let tsPlayer: { destroy: () => void } | null = null;
     let cancelled = false;
 
+    const recordFailure = (stage: string, detail: string) => {
+      setReport({
+        stage,
+        format: streamFormat || (isHls ? "m3u8" : isTs ? "ts" : "file"),
+        detail: detail.replace(/https?:\/\/\S+/gi, "[stream URL removed]"),
+        browser: navigator.userAgent,
+        online: navigator.onLine,
+      });
+    };
+
     const onLoaded = () => setLoading(false);
     video.addEventListener("loadeddata", onLoaded);
 
-    const fail = (msg: string) => {
+    const fail = (msg: string, stage = "player", detail = msg) => {
       setLoading(false);
       setError(msg);
+      recordFailure(stage, detail);
     };
 
     // Watchdog: if nothing has started playing after a while, stop the endless
     // spinner and let the user retry (usually the provider stalled or the
     // account hit its max simultaneous connections).
-    let watchdog: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      if (cancelled || video.readyState >= 3) return;
-      fail(
-        "The stream did not start. Your provider may be slow or your account may have reached its maximum simultaneous connections — close other players and try again.",
-      );
-    }, 20000);
+    let fallbackStarted = false;
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
     const clearWatchdog = () => {
       if (watchdog) clearTimeout(watchdog);
       watchdog = null;
@@ -70,6 +90,18 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
 
     /** Plays an MPEG-TS stream through mpegts.js (Media Source Extensions). */
     const playTs = async (url: string) => {
+      if (fallbackStarted || cancelled) return;
+      fallbackStarted = true;
+      setLoading(true);
+      clearWatchdog();
+      watchdog = setTimeout(() => {
+        if (cancelled || video.readyState >= 3) return;
+        fail(
+          "The MPEG-TS stream connected but did not produce playable video. Copy the bug report below.",
+          "mpegts-timeout",
+          `No playable media after 15 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
+        );
+      }, 15000);
       try {
         const mod = await import("mpegts.js");
         const mpegts = mod.default ?? mod;
@@ -83,18 +115,35 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
           { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
         );
         tsPlayer = player;
-        player.on(mpegts.Events.ERROR, () => {
+        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: unknown) => {
           fail(
             "The stream reached the player but its video or audio codec is not browser-compatible.",
+            "mpegts",
+            `${errorType || "unknown"}: ${errorDetail || "unknown"}${info ? ` ${JSON.stringify(info)}` : ""}`,
           );
         });
         player.attachMediaElement(video);
         player.load();
         void Promise.resolve(player.play()).catch(() => undefined);
-      } catch {
-        if (!cancelled) fail("This stream could not be played in the browser.");
+      } catch (caught) {
+        if (!cancelled) fail("This stream could not be played in the browser.", "mpegts-load", caught instanceof Error ? caught.message : String(caught));
       }
     };
+
+    watchdog = setTimeout(() => {
+      if (cancelled || video.readyState >= 3) return;
+      if (fallbackSrc && !fallbackStarted) {
+        hls?.destroy();
+        hls = null;
+        void playTs(fallbackSrc);
+        return;
+      }
+      fail(
+        "The stream did not start. Open Bug report below for the exact failure details.",
+        "timeout",
+        `No playable media after 15 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
+      );
+    }, 15000);
 
     if (isTs) {
       void playTs(src);
@@ -118,7 +167,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         hls?.destroy();
         hls = null;
         if (fallbackSrc) void playTs(fallbackSrc);
-        else fail("This stream could not be played in the browser.");
+        else fail("This stream could not be played in the browser.", "hls", `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`);
       });
     } else {
       video.src = src;
@@ -128,6 +177,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       if (tsPlayer || hls) return;
       fail(
         "This stream could not be played. Your browser may not support this file format (try Chrome or Edge for MKV/AVI files).",
+        "native-video",
+        `MediaError=${video.error?.code ?? "none"}; readyState=${video.readyState}; networkState=${video.networkState}`,
       );
     };
     video.addEventListener("error", onVideoError);
@@ -190,12 +241,33 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
           <p className="max-w-md text-sm text-muted-foreground">{error}</p>
-          <button
-            onClick={() => setAttempt((a) => a + 1)}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Try again
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button onClick={() => setAttempt((a) => a + 1)}>Try again</Button>
+            {report && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const safeReport = [
+                    "Streamdeck playback report",
+                    `Stage: ${report.stage}`,
+                    `Format: ${report.format}`,
+                    `Detail: ${report.detail}`,
+                    `Online: ${report.online}`,
+                    `Browser: ${report.browser}`,
+                  ].join("\n");
+                  void navigator.clipboard.writeText(safeReport).then(() => setCopied(true));
+                }}
+              >
+                {copied ? <Check /> : <Bug />}
+                {copied ? "Copied" : "Copy bug report"}
+              </Button>
+            )}
+          </div>
+          {report && (
+            <p className="max-w-lg break-words font-mono text-xs text-muted-foreground">
+              {report.stage} · {report.format} · {report.detail}
+            </p>
+          )}
         </div>
       )}
 

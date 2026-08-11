@@ -1,5 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Range, Content-Type",
+  "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, X-Stream-Status",
+  "Access-Control-Max-Age": "86400",
+} as const;
+
+function textResponse(message: string, status: number): Response {
+  return new Response(message, {
+    status,
+    headers: {
+      ...CORS_HEADERS,
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Stream-Status": `proxy-${status}`,
+    },
+  });
+}
+
 function decodeTarget(raw: string): URL | null {
   try {
     const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
@@ -51,16 +71,11 @@ export const Route = createFileRoute("/api/public/stream")({
       OPTIONS: async () =>
         new Response(null, {
           status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "Range, Content-Type",
-            "Access-Control-Max-Age": "86400",
-          },
+          headers: CORS_HEADERS,
         }),
       GET: async ({ request }) => {
         const target = decodeTarget(new URL(request.url).searchParams.get("u") ?? "");
-        if (!target) return new Response("Invalid stream target", { status: 400 });
+        if (!target) return textResponse("Invalid stream target", 400);
 
         const headers: Record<string, string> = {
           "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
@@ -73,7 +88,7 @@ export const Route = createFileRoute("/api/public/stream")({
         try {
           upstream = await fetch(target.toString(), { headers, redirect: "follow" });
         } catch {
-          return new Response("Could not reach the stream server", { status: 502 });
+          return textResponse("Could not reach the stream server", 502);
         }
 
         const contentType = upstream.headers.get("content-type") ?? "";
@@ -83,9 +98,21 @@ export const Route = createFileRoute("/api/public/stream")({
           contentType.includes("m3u");
 
         const outHeaders = new Headers({
-          "Access-Control-Allow-Origin": "*",
+          ...CORS_HEADERS,
           "Cache-Control": "no-store",
+          "X-Stream-Status": `upstream-${upstream.status}`,
         });
+
+        if (!upstream.ok) {
+          upstream.body?.cancel().catch(() => undefined);
+          return new Response(`Stream provider returned HTTP ${upstream.status}`, {
+            status: upstream.status,
+            headers: {
+              ...Object.fromEntries(outHeaders.entries()),
+              "Content-Type": "text/plain; charset=utf-8",
+            },
+          });
+        }
 
         if (isPlaylist && upstream.ok) {
           const text = await upstream.text();
