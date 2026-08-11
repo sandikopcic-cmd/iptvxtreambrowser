@@ -49,15 +49,33 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-muted-foreground sm:inline">{creds.username}</span>
+            {profiles.length > 1 ? (
+              <select
+                aria-label="Playlist"
+                value={profile?.id ?? ""}
+                onChange={(e) => selectProfile(e.target.value)}
+                className="hidden max-w-[180px] rounded-md border border-border bg-background px-2 py-1.5 text-xs text-muted-foreground outline-none focus:border-ring sm:block"
+              >
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                {profile?.name ?? creds.username}
+              </span>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <LogOut className="h-3.5 w-3.5" />
-              Log out
+              Switch playlist
             </button>
           </div>
+
         </div>
       </header>
       <main className="mx-auto max-w-[1600px] px-4 py-6">{children}</main>
