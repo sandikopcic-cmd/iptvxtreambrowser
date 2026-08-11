@@ -1,6 +1,6 @@
 import Hls from "hls.js";
-import { Bug, Check, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Bug, Check, Info, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -19,9 +19,35 @@ type PlaybackReport = {
   online: boolean;
 };
 
+type StreamStats = {
+  engine: string;
+  resolution: string;
+  quality: string;
+  fps: string;
+  bitrate: string;
+  codecs: string;
+  buffer: string;
+  dropped: string;
+};
+
+/** Labels a video height with the common broadcast quality name. */
+function qualityLabel(height: number) {
+  if (!height) return "unknown";
+  if (height >= 2000) return "4K";
+  if (height >= 1400) return "1440p";
+  if (height >= 1000) return "1080p (Full HD)";
+  if (height >= 700) return "720p (HD)";
+  if (height >= 540) return "576p (SD)";
+  if (height >= 460) return "480p (SD)";
+  return `${height}p`;
+}
+
 export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const tsPlayerRef = useRef<any>(null);
+  const engineRef = useRef<string>("native");
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -30,6 +56,66 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
   const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [report, setReport] = useState<PlaybackReport | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [stats, setStats] = useState<StreamStats | null>(null);
+
+  const readStats = useCallback((): StreamStats | null => {
+    const video = videoRef.current;
+    if (!video) return null;
+    const height = video.videoHeight;
+    const width = video.videoWidth;
+
+    let bitrate = "unknown";
+    let codecs = "unknown";
+    let fps = "unknown";
+
+    const hls = hlsRef.current;
+    if (hls) {
+      const level = hls.levels?.[hls.currentLevel] ?? hls.levels?.[0];
+      if (level) {
+        if (level.bitrate) bitrate = `${Math.round(level.bitrate / 1000)} kbps`;
+        if (level.codecSet || level.attrs?.CODECS) codecs = level.codecSet || String(level.attrs?.CODECS);
+        if (level.frameRate) fps = `${Math.round(level.frameRate)} fps`;
+      }
+    }
+
+    const ts = tsPlayerRef.current;
+    if (ts) {
+      const info = ts.statisticsInfo ?? {};
+      if (typeof info.speed === "number" && info.speed > 0) bitrate = `${Math.round(info.speed * 8)} kbps`;
+      const media = ts.mediaInfo ?? {};
+      if (media.videoCodec || media.audioCodec)
+        codecs = [media.videoCodec, media.audioCodec].filter(Boolean).join(", ");
+      if (media.fps) fps = `${Math.round(media.fps)} fps`;
+      if (typeof info.decodedFrames === "number" && typeof info.droppedFrames !== "number") {
+        // decoded frame counters only; nothing extra to report
+      }
+    }
+
+    const quality = video.getVideoPlaybackQuality?.();
+    const buffered = video.buffered.length
+      ? Math.max(0, video.buffered.end(video.buffered.length - 1) - video.currentTime)
+      : 0;
+
+    return {
+      engine: engineRef.current,
+      resolution: width && height ? `${width} × ${height}` : "unknown",
+      quality: qualityLabel(height),
+      fps,
+      bitrate,
+      codecs,
+      buffer: `${buffered.toFixed(1)} s`,
+      dropped: quality ? `${quality.droppedVideoFrames} / ${quality.totalVideoFrames}` : "n/a",
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showInfo) return;
+    setStats(readStats());
+    const id = setInterval(() => setStats(readStats()), 1000);
+    return () => clearInterval(id);
+  }, [showInfo, readStats, src, attempt]);
+
 
   useEffect(() => {
     const video = videoRef.current;
@@ -119,6 +205,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
           { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
         );
         tsPlayer = player;
+        tsPlayerRef.current = player;
+        engineRef.current = "mpegts.js (MSE)";
         player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: unknown) => {
           fail(
             "The stream reached the player but its video or audio codec is not browser-compatible.",
@@ -139,6 +227,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       if (fallbackSrc && !fallbackStarted) {
         hls?.destroy();
         hls = null;
+        hlsRef.current = null;
         void playTs(fallbackSrc);
         return;
       }
@@ -159,6 +248,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         levelLoadingMaxRetry: 2,
         fragLoadingMaxRetry: 2,
       });
+      hlsRef.current = hls;
+      engineRef.current = "hls.js";
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_e, data) => {
@@ -171,10 +262,12 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         hlsFailure = `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`;
         hls?.destroy();
         hls = null;
+        hlsRef.current = null;
         if (fallbackSrc) void playTs(fallbackSrc);
         else fail("This stream could not be played in the browser.", "hls", `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`);
       });
     } else {
+      engineRef.current = "native";
       video.src = src;
     }
 
@@ -198,6 +291,8 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       video.removeEventListener("error", onVideoError);
       if (hls) hls.destroy();
       if (tsPlayer) tsPlayer.destroy();
+      hlsRef.current = null;
+      tsPlayerRef.current = null;
       video.removeAttribute("src");
       video.load();
     };
@@ -276,6 +371,40 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         </div>
       )}
 
+      {showInfo && (
+        <div className="absolute right-3 top-3 w-64 rounded-lg border border-border bg-background/90 p-3 text-xs backdrop-blur">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold text-foreground">Stream info</span>
+            <button
+              onClick={() => setShowInfo(false)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Close stream info"
+            >
+              ✕
+            </button>
+          </div>
+          <dl className="space-y-1">
+            {[
+              ["Quality", stats?.quality],
+              ["Resolution", stats?.resolution],
+              ["Bitrate", stats?.bitrate],
+              ["Frame rate", stats?.fps],
+              ["Codecs", stats?.codecs],
+              ["Buffer", stats?.buffer],
+              ["Dropped frames", stats?.dropped],
+              ["Engine", stats?.engine],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-start justify-between gap-2">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="max-w-[60%] truncate text-right font-mono text-foreground" title={String(value ?? "")}>
+                  {value || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
         <button
           onClick={toggle}
@@ -311,6 +440,14 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         />
         <span className="truncate text-xs text-muted-foreground">{title}</span>
         <div className="ml-auto flex items-center gap-3">
+          <button
+            aria-label="Stream info"
+            aria-pressed={showInfo}
+            onClick={() => setShowInfo((v) => !v)}
+            className={`transition-colors hover:text-primary ${showInfo ? "text-primary" : "text-foreground"}`}
+          >
+            <Info className="h-5 w-5" />
+          </button>
           <button
             aria-label="Picture in picture"
             onClick={() => {
