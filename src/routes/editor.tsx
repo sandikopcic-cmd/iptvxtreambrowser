@@ -229,12 +229,16 @@ function EditorPage() {
                     {items.map((c) => {
                       const shown = !hiddenSet.has(c.id);
                       return (
-                        <label
+                        <button
                           key={c.id}
-                          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary"
+                          type="button"
+                          role="checkbox"
+                          aria-checked={shown}
+                          onClick={() => toggle(c.id)}
+                          className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
                         >
                           <span
-                            className={`flex h-4 w-4 items-center justify-center rounded border ${
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                               shown
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border"
@@ -242,12 +246,6 @@ function EditorPage() {
                           >
                             {shown && <Check className="h-3 w-3" />}
                           </span>
-                          <input
-                            type="checkbox"
-                            checked={shown}
-                            onChange={() => toggle(c.id)}
-                            className="sr-only"
-                          />
                           <span
                             className={
                               shown ? "text-foreground" : "text-muted-foreground line-through"
@@ -255,7 +253,7 @@ function EditorPage() {
                           >
                             {c.name}
                           </span>
-                        </label>
+                        </button>
                       );
                     })}
                   </div>
