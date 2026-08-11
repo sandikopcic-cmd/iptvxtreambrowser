@@ -188,32 +188,82 @@ function EditorPage() {
           {categories.isError && (
             <p className="p-3 text-sm text-destructive">{(categories.error as Error).message}</p>
           )}
-          {list.map((c) => {
-            const shown = !hiddenSet.has(c.id);
+          {groups.map(([group, items]) => {
+            const ids = items.map((c) => c.id);
+            const shownCount = ids.filter((id) => !hiddenSet.has(id)).length;
+            const expanded = searching || open[group] === true;
             return (
-              <label
-                key={c.id}
-                className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary"
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded border ${
-                    shown ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                  }`}
-                >
-                  {shown && <Check className="h-3 w-3" />}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={shown}
-                  onChange={() => toggle(c.id)}
-                  className="sr-only"
-                />
-                <span className={shown ? "text-foreground" : "text-muted-foreground line-through"}>
-                  {c.name}
-                </span>
-              </label>
+              <div key={group} className="mb-1 rounded-lg border border-border/60">
+                <div className="flex items-center gap-2 rounded-t-lg bg-secondary/40 px-2 py-2">
+                  <button
+                    onClick={() => setOpen((p) => ({ ...p, [group]: !expanded }))}
+                    className="flex flex-1 items-center gap-2 text-left text-sm font-medium"
+                  >
+                    {expanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span>{group}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {shownCount}/{items.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setGroupVisible(ids, true)}
+                    title={`Show all ${group}`}
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setGroupVisible(ids, false)}
+                    title={`Hide all ${group}`}
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <EyeOff className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {expanded && (
+                  <div className="p-1">
+                    {items.map((c) => {
+                      const shown = !hiddenSet.has(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-secondary"
+                        >
+                          <span
+                            className={`flex h-4 w-4 items-center justify-center rounded border ${
+                              shown
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border"
+                            }`}
+                          >
+                            {shown && <Check className="h-3 w-3" />}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={shown}
+                            onChange={() => toggle(c.id)}
+                            className="sr-only"
+                          />
+                          <span
+                            className={
+                              shown ? "text-foreground" : "text-muted-foreground line-through"
+                            }
+                          >
+                            {c.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
+
           {!categories.isLoading && list.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">No categories found.</p>
           )}
