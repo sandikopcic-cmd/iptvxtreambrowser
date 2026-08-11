@@ -49,21 +49,21 @@ function VodPage() {
   const categories = useQuery({
     queryKey: ["vod-categories", creds?.username],
     queryFn: () => getCategories({ data: { ...creds!, kind: "vod" as const } }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const movies = useQuery({
     queryKey: ["vod-streams", creds?.username],
     queryFn: () => getStreams({ data: creds! }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const detail = useQuery({
     queryKey: ["vod-info", creds?.username, selected?.id],
     queryFn: () => getInfo({ data: { ...creds!, vodId: selected!.id } }),
-    enabled: !!creds && !!selected,
+    enabled: !!creds && !isM3u && !!selected,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -138,6 +138,8 @@ function VodPage() {
       </div>
     );
   }
+
+  if (isM3u) return <M3uNotice what="Movies" />;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">

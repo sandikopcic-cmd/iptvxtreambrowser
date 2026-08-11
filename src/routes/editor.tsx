@@ -15,6 +15,7 @@ import {
   Search,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { M3uNotice } from "@/components/M3uNotice";
 import { useXtreamAuth } from "@/lib/xtream-auth";
 import {
   getCategoryOrder,

@@ -50,21 +50,21 @@ function SeriesPage() {
   const categories = useQuery({
     queryKey: ["series-categories", creds?.username],
     queryFn: () => getCategories({ data: { ...creds!, kind: "series" as const } }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const list = useQuery({
     queryKey: ["series-list", creds?.username],
     queryFn: () => getList({ data: creds! }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const detail = useQuery({
     queryKey: ["series-info", creds?.username, selected?.id],
     queryFn: () => getInfo({ data: { ...creds!, seriesId: selected!.id } }),
-    enabled: !!creds && !!selected,
+    enabled: !!creds && !isM3u && !!selected,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -179,6 +179,8 @@ function SeriesPage() {
       </div>
     );
   }
+
+  if (isM3u) return <M3uNotice what="Series" />;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
