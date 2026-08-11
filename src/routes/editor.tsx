@@ -253,7 +253,7 @@ function EditorPage() {
                           >
                             {c.name}
                           </span>
-                        </label>
+                        </button>
                       );
                     })}
                   </div>
