@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
 import { movieStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
+import { useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamVodInfo, xtreamVodStreams } from "@/lib/xtream.functions";
 import type { VodItem } from "@/lib/xtream-types";
 
@@ -34,6 +35,8 @@ function VodPage() {
   const getCategories = useServerFn(xtreamCategories);
   const getStreams = useServerFn(xtreamVodStreams);
   const getInfo = useServerFn(xtreamVodInfo);
+
+  const { hiddenSet } = useHiddenCategories(creds?.username, "vod");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -66,10 +69,12 @@ function VodPage() {
     const q = search.trim().toLowerCase();
     return list.filter(
       (m) =>
-        (category === "all" || m.categoryId === category) &&
+        (category === "all"
+          ? !hiddenSet.has(m.categoryId ?? "")
+          : m.categoryId === category) &&
         (!q || m.name.toLowerCase().includes(q)),
     );
-  }, [movies.data, category, search]);
+  }, [movies.data, category, search, hidden]);
 
   if (selected) {
     const ext = detail.data?.ext ?? selected.ext ?? "mp4";
@@ -144,7 +149,7 @@ function VodPage() {
           >
             All movies
           </button>
-          {(categories.data ?? []).map((c) => (
+          {(categories.data ?? []).filter((c) => !hiddenSet.has(c.id)).map((c) => (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}
