@@ -83,4 +83,6 @@ export type EpgEntry = {
   description: string;
   start: string;
   end: string;
+  startTs: number | null;
+  endTs: number | null;
 };

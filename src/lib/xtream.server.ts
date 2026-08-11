@@ -176,11 +176,18 @@ function decodeB64(value: string): string {
   }
 }
 
+function num(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function parseEpg(raw: unknown): EpgEntry[] {
   return asArray(asRec(raw)["epg_listings"]).map((e) => ({
     title: decodeB64(String(e["title"] ?? "")),
     description: decodeB64(String(e["description"] ?? "")),
     start: String(e["start"] ?? ""),
     end: String(e["end"] ?? e["stop"] ?? ""),
+    startTs: num(e["start_timestamp"]),
+    endTs: num(e["stop_timestamp"] ?? e["end_timestamp"]),
   }));
 }
