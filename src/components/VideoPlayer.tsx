@@ -1,6 +1,6 @@
 import Hls from "hls.js";
-import { Bug, Check, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Bug, Check, Info, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type Props = {
