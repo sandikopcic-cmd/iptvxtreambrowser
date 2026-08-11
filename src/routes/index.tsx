@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, MonitorPlay, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
 import { importM3u } from "@/lib/m3u.functions";
 import { saveCreds, saveM3uPlaylist, useXtreamAuth } from "@/lib/xtream-auth";
+import { useCloudSync } from "@/lib/cloud-sync";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
+  const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
   const loadM3u = useServerFn(importM3u);
   const [mode, setMode] = useState<"xtream" | "m3u">("xtream");
@@ -81,6 +83,14 @@ function LoginPage() {
               ? "Choose a playlist to load, or add another one."
               : "Add your Xtream Codes playlist to watch live TV, movies and series in this browser."}
           </p>
+          <Link
+            to="/account"
+            className="mt-4 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            {cloud.session
+              ? `Synced to ${cloud.session.user.email}`
+              : "Sign in to sync playlists across devices"}
+          </Link>
         </div>
 
         {hasProfiles && (

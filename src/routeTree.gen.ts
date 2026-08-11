@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as SeriesRouteImport } from './routes/series'
@@ -19,6 +20,11 @@ import { Route as ApiPublicStreamRouteImport } from './routes/api/public/stream'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditorRoute = EditorRouteImport.update({
@@ -49,6 +55,7 @@ const ApiPublicStreamRoute = ApiPublicStreamRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/editor': typeof EditorRoute
   '/live': typeof LiveRoute
   '/series': typeof SeriesRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/editor': typeof EditorRoute
   '/live': typeof LiveRoute
   '/series': typeof SeriesRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/editor': typeof EditorRoute
   '/live': typeof LiveRoute
   '/series': typeof SeriesRoute
@@ -75,12 +84,26 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/editor' | '/live' | '/series' | '/vod' | '/api/public/stream'
+    | '/'
+    | '/account'
+    | '/editor'
+    | '/live'
+    | '/series'
+    | '/vod'
+    | '/api/public/stream'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor' | '/live' | '/series' | '/vod' | '/api/public/stream'
+  to:
+    | '/'
+    | '/account'
+    | '/editor'
+    | '/live'
+    | '/series'
+    | '/vod'
+    | '/api/public/stream'
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/editor'
     | '/live'
     | '/series'
@@ -90,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   EditorRoute: typeof EditorRoute
   LiveRoute: typeof LiveRoute
   SeriesRoute: typeof SeriesRoute
@@ -104,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/editor': {
@@ -146,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   EditorRoute: EditorRoute,
   LiveRoute: LiveRoute,
   SeriesRoute: SeriesRoute,
