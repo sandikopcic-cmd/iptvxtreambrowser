@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useCloudSync } from "@/lib/cloud-sync";
+import { useNativeShell } from "@/lib/native-shell";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
