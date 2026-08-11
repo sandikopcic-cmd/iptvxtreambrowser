@@ -45,6 +45,8 @@ function LivePage() {
   const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<LiveChannel | null>(null);
+  const [epgOffset, setEpgOffset] = useEpgOffset();
+
 
   const categories = useQuery({
     queryKey: ["live-categories", creds?.username],
