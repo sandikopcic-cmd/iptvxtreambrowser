@@ -30,6 +30,7 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
+  const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
   const loadM3u = useServerFn(importM3u);
   const [mode, setMode] = useState<"xtream" | "m3u">("xtream");
