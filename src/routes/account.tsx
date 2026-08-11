@@ -110,6 +110,45 @@ function AccountPage() {
               Your playlists, favourites, hidden categories and ordering sync automatically
               {status === "syncing" ? " (syncing…)" : ""}.
             </p>
+            {!nativeShell && (
+              <div className="space-y-2 rounded-md border border-border bg-secondary/40 p-3 text-left">
+                <p className="text-xs text-muted-foreground">
+                  Set a password to sign in inside the TV app (Google sign-in only works in a
+                  browser).
+                </p>
+                <Input
+                  type="password"
+                  placeholder="New password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={busy || password.length < 6}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    setMessage(null);
+                    const { error: err } = await supabase.auth.updateUser({ password });
+                    setBusy(false);
+                    if (err) setError(err.message);
+                    else {
+                      setPassword("");
+                      setMessage(
+                        "Password saved — use this email and password in the TV app.",
+                      );
+                    }
+                  }}
+                >
+                  {busy && <Loader2 className="animate-spin" />} Save password
+                </Button>
+                {error && <p className="text-xs text-destructive">{error}</p>}
+                {message && <p className="text-xs text-primary">{message}</p>}
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <Button onClick={() => void navigate({ to: "/" })}>Go to playlists</Button>
               <Button
@@ -122,6 +161,7 @@ function AccountPage() {
                 <LogOut /> Sign out
               </Button>
             </div>
+
           </div>
         ) : (
           <div className="space-y-5 rounded-xl border border-border bg-card p-6">
