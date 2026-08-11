@@ -155,6 +155,7 @@ function LivePage() {
             <Player
               key={selected.id}
               src={liveStreamUrl(creds, selected.id)}
+              fallbackSrc={liveStreamUrl(creds, selected.id, false)}
               title={selected.name}
               poster={selected.icon}
             />

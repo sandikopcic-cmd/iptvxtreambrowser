@@ -9,7 +9,12 @@ function Skeleton() {
   );
 }
 
-export function Player(props: { src: string; title?: string; poster?: string | null }) {
+export function Player(props: {
+  src: string;
+  fallbackSrc?: string;
+  title?: string;
+  poster?: string | null;
+}) {
   return (
     <ClientOnly fallback={<Skeleton />}>
       <Suspense fallback={<Skeleton />}>
