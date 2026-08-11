@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Search, Star } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
-import { liveStreamUrl } from "@/lib/stream-url";
-import { useXtreamAuth } from "@/lib/xtream-auth";
+import { liveStreamUrl, proxied } from "@/lib/stream-url";
+import { getM3uChannels, useXtreamAuth } from "@/lib/xtream-auth";
 import { sortByOrder, useCategoryOrder, useFavorites, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
-import type { LiveChannel } from "@/lib/xtream-types";
+import type { Category, LiveChannel, M3uChannel } from "@/lib/xtream-types";
 import { epgMs, formatEpgTime, useEpgOffset } from "@/lib/epg-time";
 
 
@@ -33,7 +33,8 @@ export const Route = createFileRoute("/live")({
 });
 
 function LivePage() {
-  const { creds } = useXtreamAuth();
+  const { creds, profile } = useXtreamAuth();
+  const isM3u = profile?.kind === "m3u";
   const getCategories = useServerFn(xtreamCategories);
   const getStreams = useServerFn(xtreamLiveStreams);
   const getEpg = useServerFn(xtreamShortEpg);
@@ -48,35 +49,64 @@ function LivePage() {
   const [epgOffset, setEpgOffset] = useEpgOffset();
 
 
+  const [m3uList, setM3uList] = useState<M3uChannel[]>([]);
+  useEffect(() => {
+    setM3uList(isM3u && profile ? getM3uChannels(profile.id) : []);
+  }, [isM3u, profile?.id]);
+
+  /** Categories + channels derived from a stored M3U playlist (group-title = category). */
+  const m3u = useMemo(() => {
+    const cats = new Map<string, Category>();
+    const urls = new Map<string, string>();
+    const list: LiveChannel[] = m3uList.map((c, i) => {
+      const id = c.group.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "ungrouped";
+      if (!cats.has(id)) cats.set(id, { id, name: c.group });
+      urls.set(c.id, c.url);
+      return {
+        id: c.id,
+        name: c.name,
+        icon: c.icon,
+        categoryId: id,
+        epgChannelId: c.epgChannelId,
+        num: i + 1,
+      };
+    });
+    return { categories: [...cats.values()], channels: list, urls };
+  }, [m3uList]);
+
   const categories = useQuery({
     queryKey: ["live-categories", creds?.username],
     queryFn: () => getCategories({ data: { ...creds!, kind: "live" as const } }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const channels = useQuery({
     queryKey: ["live-streams", creds?.username],
     queryFn: () => getStreams({ data: creds! }),
-    enabled: !!creds,
+    enabled: !!creds && !isM3u,
     staleTime: 10 * 60 * 1000,
   });
 
   const epg = useQuery({
     queryKey: ["epg", creds?.username, selected?.id],
     queryFn: () => getEpg({ data: { ...creds!, streamId: selected!.id } }),
-    enabled: !!creds && !!selected,
+    enabled: !!creds && !!selected && !isM3u,
     staleTime: 60 * 1000,
   });
 
+  const categoryList = isM3u ? m3u.categories : (categories.data ?? []);
+  const channelList = isM3u ? m3u.channels : (channels.data ?? []);
+  const listLoading = !isM3u && channels.isLoading;
+
   const visibleCategories = useMemo(
-    () => sortByOrder((categories.data ?? []).filter((c) => !hiddenSet.has(c.id)), order),
-    [categories.data, hidden, order],
+    () => sortByOrder(categoryList.filter((c) => !hiddenSet.has(c.id)), order),
+    [categoryList, hidden, order],
   );
 
   /** Move a visible category one slot up/down and persist immediately. */
   const moveCategory = (id: string, dir: -1 | 1) => {
-    const all = categories.data ?? [];
+    const all = categoryList;
     const full = sortByOrder(all, order).map((c) => c.id);
     const visibleIds = visibleCategories.map((c) => c.id);
     const at = visibleIds.indexOf(id);
@@ -92,7 +122,7 @@ function LivePage() {
   };
 
   const filtered = useMemo(() => {
-    const list = channels.data ?? [];
+    const list = channelList;
     const q = search.trim().toLowerCase();
     return list.filter(
       (c) =>
@@ -103,7 +133,7 @@ function LivePage() {
             : c.categoryId === category) &&
         (!q || c.name.toLowerCase().includes(q)),
     );
-  }, [channels.data, category, search, hidden, favoriteSet]);
+  }, [channelList, category, search, hidden, favoriteSet]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_320px_1fr]">
@@ -163,8 +193,8 @@ function LivePage() {
           />
         </div>
         <div className="max-h-[68vh] space-y-1 overflow-y-auto">
-          {channels.isLoading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
-          {channels.isError && (
+          {listLoading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
+          {!isM3u && channels.isError && (
             <p className="p-3 text-sm text-destructive">{(channels.error as Error).message}</p>
           )}
           {filtered.slice(0, 800).map((c) => {
@@ -211,7 +241,7 @@ function LivePage() {
               </div>
             );
           })}
-          {!channels.isLoading && filtered.length === 0 && (
+          {!listLoading && filtered.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">
               {category === "favorites" ? "No favorites yet." : "No channels found."}
             </p>
@@ -224,8 +254,8 @@ function LivePage() {
           <>
             <Player
               key={selected.id}
-              src={liveStreamUrl(creds, selected.id)}
-              fallbackSrc={liveStreamUrl(creds, selected.id, false)}
+              src={isM3u ? proxied(m3u.urls.get(selected.id) ?? "") : liveStreamUrl(creds, selected.id)}
+              {...(isM3u ? {} : { fallbackSrc: liveStreamUrl(creds, selected.id, false) })}
               title={selected.name}
               poster={selected.icon}
             />
