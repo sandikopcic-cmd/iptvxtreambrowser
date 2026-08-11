@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useCloudSync } from "@/lib/cloud-sync";
+import { useNativeShell } from "@/lib/native-shell";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/account")({
 function AccountPage() {
   const { session, ready, status } = useCloudSync();
   const navigate = useNavigate();
+  const nativeShell = useNativeShell();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -132,15 +134,26 @@ function AccountPage() {
               </p>
             </div>
 
-            <Button variant="outline" className="w-full" onClick={() => void google()}>
-              Continue with Google
-            </Button>
+            {nativeShell ? (
+              <p className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
+                Google sign-in ne deluje v TV aplikaciji (odpre se zunanji brskalnik in se ne
+                vrne). Na Fire TV uporabi e-pošto in geslo. Če imaš račun samo z Googlom, se
+                enkrat prijavi v brskalniku na računalniku, nastavi geslo in ga uporabi tukaj.
+              </p>
+            ) : (
+              <>
+                <Button variant="outline" className="w-full" onClick={() => void google()}>
+                  Continue with Google
+                </Button>
 
-            <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              or
-              <span className="h-px flex-1 bg-border" />
-            </div>
+                <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              </>
+            )}
+
 
             <form className="space-y-3" onSubmit={submit}>
               <div className="space-y-1.5">
