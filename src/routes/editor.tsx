@@ -120,6 +120,8 @@ function EditorPage() {
     return ordered.filter((c) => !q || c.name.toLowerCase().includes(q));
   }, [ordered, search]);
 
+  const hiddenSet = useMemo(() => new Set(hiddenDraft), [hiddenDraft]);
+
   const groups = useMemo(() => {
     const map = new Map<string, typeof list>();
     for (const c of list) {
@@ -128,13 +130,34 @@ function EditorPage() {
       arr.push(c);
       map.set(g, arr);
     }
-    return [...map.entries()];
-  }, [list]);
+    // hidden items sink to the bottom within each group, and fully hidden
+    // groups sink to the bottom of the list (stable otherwise)
+    const entries = [...map.entries()].map(
+      ([g, items]) =>
+        [
+          g,
+          [
+            ...items.filter((c) => !hiddenSet.has(c.id)),
+            ...items.filter((c) => hiddenSet.has(c.id)),
+          ],
+        ] as [string, typeof list],
+    );
+    return entries
+      .map((e, i) => ({
+        e,
+        i,
+        allHidden: e[1].every((c) => hiddenSet.has(c.id)),
+      }))
+      .sort((a, b) =>
+        a.allHidden === b.allHidden ? a.i - b.i : a.allHidden ? 1 : -1,
+      )
+      .map((x) => x.e);
+  }, [list, hiddenSet]);
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const searching = search.trim().length > 0;
 
-  const hiddenSet = new Set(hiddenDraft);
+
   const dirty =
     JSON.stringify([...hiddenDraft].sort()) !==
       JSON.stringify([...getHidden(creds?.username, kind)].sort()) ||
