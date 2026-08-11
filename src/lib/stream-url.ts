@@ -16,7 +16,17 @@ function toBase64Url(value: string): string {
 }
 
 export function proxied(absoluteUrl: string): string {
-  return `/api/public/stream?u=${toBase64Url(absoluteUrl)}`;
+  let format = "";
+  try {
+    const pathname = new URL(absoluteUrl).pathname;
+    const match = pathname.match(/\.([a-z0-9]+)$/i);
+    format = match?.[1]?.toLowerCase() ?? "";
+  } catch {
+    format = "";
+  }
+
+  const formatParam = format ? `&format=${encodeURIComponent(format)}` : "";
+  return `/api/public/stream?u=${toBase64Url(absoluteUrl)}${formatParam}`;
 }
 
 export function liveStreamUrl(creds: XtreamCreds, streamId: string, hls = true): string {
