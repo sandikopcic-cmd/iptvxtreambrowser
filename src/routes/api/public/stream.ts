@@ -65,6 +65,62 @@ function rewritePlaylist(body: string, baseUrl: URL): string {
     .join("\n");
 }
 
+async function inspectStream(
+  upstream: Response,
+): Promise<{ isPlaylist: boolean; body: BodyInit | null }> {
+  if (!upstream.body) return { isPlaylist: false, body: null };
+
+  const reader = upstream.body.getReader();
+  const first = await reader.read();
+  if (first.done || !first.value) {
+    reader.releaseLock();
+    return { isPlaylist: false, body: null };
+  }
+
+  const prefix = new TextDecoder().decode(first.value.slice(0, 64)).trimStart();
+  if (prefix.startsWith("#EXTM3U")) {
+    const chunks = [first.value];
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      chunks.push(next.value);
+    }
+    const length = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { isPlaylist: true, body: new TextDecoder().decode(bytes) };
+  }
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(first.value);
+      const pump = async () => {
+        try {
+          while (true) {
+            const next = await reader.read();
+            if (next.done) {
+              controller.close();
+              break;
+            }
+            controller.enqueue(next.value);
+          }
+        } catch (error) {
+          controller.error(error);
+        }
+      };
+      void pump();
+    },
+    cancel() {
+      return reader.cancel();
+    },
+  });
+  return { isPlaylist: false, body };
+}
+
 export const Route = createFileRoute("/api/public/stream")({
   server: {
     handlers: {
@@ -91,12 +147,6 @@ export const Route = createFileRoute("/api/public/stream")({
           return textResponse("Could not reach the stream server", 502);
         }
 
-        const contentType = upstream.headers.get("content-type") ?? "";
-        const isPlaylist =
-          target.pathname.endsWith(".m3u8") ||
-          contentType.includes("mpegurl") ||
-          contentType.includes("m3u");
-
         const outHeaders = new Headers({
           ...CORS_HEADERS,
           "Cache-Control": "no-store",
@@ -114,10 +164,17 @@ export const Route = createFileRoute("/api/public/stream")({
           });
         }
 
-        if (isPlaylist && upstream.ok) {
-          const text = await upstream.text();
+        let inspected: { isPlaylist: boolean; body: BodyInit | null };
+        try {
+          inspected = await inspectStream(upstream);
+        } catch {
+          upstream.body?.cancel().catch(() => undefined);
+          return textResponse("The stream server closed the connection before sending media", 502);
+        }
+
+        if (inspected.isPlaylist) {
           outHeaders.set("Content-Type", "application/vnd.apple.mpegurl");
-          return new Response(rewritePlaylist(text, new URL(upstream.url || target.toString())), {
+          return new Response(rewritePlaylist(String(inspected.body ?? ""), new URL(upstream.url || target.toString())), {
             status: upstream.status,
             headers: outHeaders,
           });
@@ -129,7 +186,7 @@ export const Route = createFileRoute("/api/public/stream")({
         }
         if (!outHeaders.has("content-type")) outHeaders.set("content-type", "video/mp2t");
 
-        return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
+        return new Response(inspected.body, { status: upstream.status, headers: outHeaders });
       },
     },
   },

@@ -56,6 +56,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
     let hls: Hls | null = null;
     let tsPlayer: { destroy: () => void } | null = null;
     let cancelled = false;
+    let hlsFailure = "";
 
     const recordFailure = (stage: string, detail: string) => {
       setReport({
@@ -99,9 +100,9 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         fail(
           "The MPEG-TS stream connected but did not produce playable video. Copy the bug report below.",
           "mpegts-timeout",
-          `No playable media after 15 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
+          `${hlsFailure ? `HLS failed first (${hlsFailure}); ` : ""}No playable TS media after 20 seconds; readyState=${video.readyState}; networkState=${video.networkState}`,
         );
-      }, 15000);
+      }, 20000);
       try {
         const mod = await import("mpegts.js");
         const mpegts = mod.default ?? mod;
@@ -164,6 +165,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
           return;
         }
         // HLS is unavailable for this channel — fall back to the raw TS stream.
+        hlsFailure = `${data.type}: ${data.details}; response=${data.response?.code ?? "none"}`;
         hls?.destroy();
         hls = null;
         if (fallbackSrc) void playTs(fallbackSrc);
