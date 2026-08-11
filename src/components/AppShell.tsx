@@ -1,9 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Radio, Clapperboard, Tv, MonitorPlay, SlidersHorizontal, UserRound } from "lucide-react";
+import { LogOut, Radio, Clapperboard, Tv, MonitorPlay, SlidersHorizontal, UserRound, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useXtreamAuth } from "@/lib/xtream-auth";
 import { useCloudSync } from "@/lib/cloud-sync";
+import { useDirectPlay } from "@/lib/stream-url";
 
 const tabs = [
   { to: "/live", label: "Live TV", icon: Radio },
@@ -16,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { creds, profile, profiles, ready, logout, selectProfile } = useXtreamAuth();
   const navigate = useNavigate();
   const { session } = useCloudSync();
+  const [directPlay, setDirectPlay] = useDirectPlay();
 
   useEffect(() => {
     if (ready && !creds) void navigate({ to: "/" });
@@ -69,6 +71,23 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {profile?.name ?? creds.username}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setDirectPlay(!directPlay)}
+              title={
+                directPlay
+                  ? "Direct: your device connects straight to the IPTV provider"
+                  : "Proxy: streams go through this site (may be blocked with HTTP 458)"
+              }
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors ${
+                directPlay
+                  ? "border-primary/60 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              {directPlay ? "Direct" : "Proxy"}
+            </button>
             <Link
               to="/account"
               title={session ? `Signed in as ${session.user.email}` : "Sign in to sync playlists"}
