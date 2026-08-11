@@ -76,6 +76,24 @@ function EditorPage() {
     return (categories.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q));
   }, [categories.data, search]);
 
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof list>();
+    for (const c of list) {
+      const g = groupOf(c.name);
+      const arr = map.get(g) ?? [];
+      arr.push(c);
+      map.set(g, arr);
+    }
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === "OTHER") return 1;
+      if (b[0] === "OTHER") return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [list]);
+
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const searching = search.trim().length > 0;
+
   const hiddenSet = new Set(hiddenDraft);
   const dirty =
     JSON.stringify([...hiddenDraft].sort()) !==
@@ -85,6 +103,16 @@ function EditorPage() {
     setSaved(false);
     setHiddenDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const setGroupVisible = (ids: string[], visible: boolean) => {
+    setSaved(false);
+    setHiddenDraft((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) (visible ? next.delete(id) : next.add(id));
+      return [...next];
+    });
+  };
+
 
   const showAll = () => {
     setSaved(false);
