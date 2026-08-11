@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
   src: string;
+  /** Alternative MPEG-TS URL used when HLS playback fails. */
+  fallbackSrc?: string;
   title?: string;
   poster?: string | null;
 };
 
-export default function VideoPlayer({ src, title, poster }: Props) {
+export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -26,36 +28,71 @@ export default function VideoPlayer({ src, title, poster }: Props) {
     setLoading(true);
 
     const isHls = src.includes(".m3u8") || src.includes("%2Em3u8");
+    const isTs = /\.(ts|m2ts|mpegts)(\?|$)/i.test(decodeURIComponent(src));
     let hls: Hls | null = null;
+    let tsPlayer: { destroy: () => void } | null = null;
+    let cancelled = false;
 
     const onLoaded = () => setLoading(false);
     video.addEventListener("loadeddata", onLoaded);
 
-    if (isHls && Hls.isSupported()) {
+    const fail = (msg: string) => {
+      setLoading(false);
+      setError(msg);
+    };
+
+    /** Plays an MPEG-TS stream through mpegts.js (Media Source Extensions). */
+    const playTs = async (url: string) => {
+      try {
+        const mod = await import("mpegts.js");
+        const mpegts = mod.default ?? mod;
+        if (cancelled) return;
+        if (!mpegts.isSupported()) {
+          fail("Your browser cannot play this MPEG-TS stream. Try Chrome or Edge.");
+          return;
+        }
+        const player = mpegts.createPlayer(
+          { type: "mpegts", url, isLive: true, hasAudio: true, hasVideo: true },
+          { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
+        );
+        tsPlayer = player;
+        player.on(mpegts.Events.ERROR, () =>
+          fail("This stream could not be played. Your provider may be offline or blocking playback."),
+        );
+        player.attachMediaElement(video);
+        player.load();
+        void player.play().catch(() => undefined);
+      } catch {
+        if (!cancelled) fail("This stream could not be played in the browser.");
+      }
+    };
+
+    if (isTs) {
+      void playTs(src);
+    } else if (isHls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false, enableWorker: true });
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          hls?.startLoad();
-          return;
-        }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls?.recoverMediaError();
           return;
         }
-        setLoading(false);
-        setError("This stream could not be played in the browser.");
+        // HLS is unavailable for this channel — fall back to the raw TS stream.
+        hls?.destroy();
+        hls = null;
+        if (fallbackSrc) void playTs(fallbackSrc);
+        else fail("This stream could not be played in the browser.");
       });
     } else {
       video.src = src;
     }
 
     const onVideoError = () => {
-      setLoading(false);
-      setError(
-        "This stream could not be played. Your provider may only offer it in a format browsers cannot decode (MPEG-TS).",
+      if (tsPlayer || hls) return;
+      fail(
+        "This stream could not be played. Your browser may not support this file format (try Chrome or Edge for MKV/AVI files).",
       );
     };
     video.addEventListener("error", onVideoError);
@@ -63,13 +100,15 @@ export default function VideoPlayer({ src, title, poster }: Props) {
     void video.play().catch(() => undefined);
 
     return () => {
+      cancelled = true;
       video.removeEventListener("loadeddata", onLoaded);
       video.removeEventListener("error", onVideoError);
       if (hls) hls.destroy();
+      if (tsPlayer) tsPlayer.destroy();
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, attempt]);
+  }, [src, fallbackSrc, attempt]);
 
   const toggle = () => {
     const video = videoRef.current;
