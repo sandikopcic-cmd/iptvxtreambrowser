@@ -299,7 +299,7 @@ function EditorPage() {
   const total = categories.data?.length ?? 0;
   const visible = total - hiddenDraft.length;
 
-  if (isM3u) return <M3uNotice what="Playlist editing" />;
+  if (isM3u) return <M3uNotice what="the playlist editor" />;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
