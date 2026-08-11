@@ -10,7 +10,13 @@ import {
   parseVodDetail,
   xtreamApi,
 } from "./xtream.server";
-import { credsSchema } from "./xtream-schemas";
+import {
+  categoriesSchema,
+  credsSchema,
+  epgSchema,
+  seriesInfoSchema,
+  vodInfoSchema,
+} from "./xtream-schemas";
 
 export const xtreamLogin = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => credsSchema.parse(input))
@@ -18,7 +24,7 @@ export const xtreamLogin = createServerFn({ method: "POST" })
 
 export const xtreamCategories = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    credsSchema.extend({ kind: liveVodSeries }).parse(input),
+    categoriesSchema.parse(input),
   )
   .handler(async ({ data }) =>
     parseCategories(await xtreamApi(data, { action: `get_${data.kind}_categories` })),
@@ -38,7 +44,7 @@ export const xtreamSeriesList = createServerFn({ method: "POST" })
 
 export const xtreamVodInfo = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    credsSchema.extend({ vodId: z.string().min(1).max(30) }).parse(input),
+    vodInfoSchema.parse(input),
   )
   .handler(async ({ data }) =>
     parseVodDetail(await xtreamApi(data, { action: "get_vod_info", vod_id: data.vodId })),
@@ -46,7 +52,7 @@ export const xtreamVodInfo = createServerFn({ method: "POST" })
 
 export const xtreamSeriesInfo = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    credsSchema.extend({ seriesId: z.string().min(1).max(30) }).parse(input),
+    seriesInfoSchema.parse(input),
   )
   .handler(async ({ data }) =>
     parseSeriesDetail(
@@ -56,7 +62,7 @@ export const xtreamSeriesInfo = createServerFn({ method: "POST" })
 
 export const xtreamShortEpg = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    credsSchema.extend({ streamId: z.string().min(1).max(30) }).parse(input),
+    epgSchema.parse(input),
   )
   .handler(async ({ data }) =>
     parseEpg(
