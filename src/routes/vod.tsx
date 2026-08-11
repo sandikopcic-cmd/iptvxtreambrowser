@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Player } from "@/components/Player";
 import { movieStreamUrl } from "@/lib/stream-url";
 import { useXtreamAuth } from "@/lib/xtream-auth";
-import { useHiddenCategories } from "@/lib/playlist-prefs";
+import { sortByOrder, useCategoryOrder, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamVodInfo, xtreamVodStreams } from "@/lib/xtream.functions";
 import type { VodItem } from "@/lib/xtream-types";
 
@@ -37,6 +37,7 @@ function VodPage() {
   const getInfo = useServerFn(xtreamVodInfo);
 
   const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "vod");
+  const { order } = useCategoryOrder(creds?.username, "vod");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -149,7 +150,10 @@ function VodPage() {
           >
             All movies
           </button>
-          {(categories.data ?? []).filter((c) => !hiddenSet.has(c.id)).map((c) => (
+          {sortByOrder(
+            (categories.data ?? []).filter((c) => !hiddenSet.has(c.id)),
+            order,
+          ).map((c) => (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}

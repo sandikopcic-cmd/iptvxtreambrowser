@@ -2,10 +2,26 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Save, Search } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  Save,
+  Search,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useXtreamAuth } from "@/lib/xtream-auth";
-import { getHidden, setHidden, type PlaylistKind } from "@/lib/playlist-prefs";
+import {
+  getCategoryOrder,
+  getHidden,
+  setCategoryOrder,
+  setHidden,
+  sortByOrder,
+  type PlaylistKind,
+} from "@/lib/playlist-prefs";
 import { xtreamCategories } from "@/lib/xtream.functions";
 
 /** Derive a country/section group from a category name like "UK: Sky Sports". */
@@ -20,7 +36,6 @@ function groupOf(name: string): string {
   return "OTHER";
 }
 
-
 export const Route = createFileRoute("/editor")({
   head: () => ({
     meta: [
@@ -28,12 +43,12 @@ export const Route = createFileRoute("/editor")({
       {
         name: "description",
         content:
-          "Hide the Xtream categories you never watch and keep a clean, personalised IPTV playlist.",
+          "Hide the Xtream categories you never watch, reorder them and keep a clean, personalised IPTV playlist.",
       },
       { property: "og:title", content: "Playlist Editor — Streamdeck" },
       {
         property: "og:description",
-        content: "Choose which live TV, movie and series categories appear in your player.",
+        content: "Choose and reorder the live TV, movie and series categories in your player.",
       },
     ],
   }),
@@ -50,6 +65,8 @@ const kinds: { key: PlaylistKind; label: string }[] = [
   { key: "series", label: "Series" },
 ];
 
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 function EditorPage() {
   const { creds } = useXtreamAuth();
   const getCategories = useServerFn(xtreamCategories);
@@ -57,6 +74,7 @@ function EditorPage() {
   const [kind, setKind] = useState<PlaylistKind>("live");
   const [search, setSearch] = useState("");
   const [hiddenDraft, setHiddenDraft] = useState<string[]>([]);
+  const [orderDraft, setOrderDraft] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
   const categories = useQuery({
@@ -71,10 +89,36 @@ function EditorPage() {
     setSaved(false);
   }, [creds?.username, kind]);
 
+  // Seed the order draft: saved order when present, otherwise categories grouped alphabetically.
+  useEffect(() => {
+    const cats = categories.data ?? [];
+    if (cats.length === 0) {
+      setOrderDraft([]);
+      return;
+    }
+    const savedOrder = getCategoryOrder(creds?.username, kind);
+    if (savedOrder.length > 0) {
+      setOrderDraft(sortByOrder(cats, savedOrder).map((c) => c.id));
+      return;
+    }
+    const rank = (name: string) => {
+      const g = groupOf(name);
+      return g === "OTHER" ? "\uffff" : g;
+    };
+    setOrderDraft(
+      [...cats].sort((a, b) => rank(a.name).localeCompare(rank(b.name))).map((c) => c.id),
+    );
+  }, [categories.data, creds?.username, kind]);
+
+  const ordered = useMemo(
+    () => sortByOrder(categories.data ?? [], orderDraft),
+    [categories.data, orderDraft],
+  );
+
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (categories.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q));
-  }, [categories.data, search]);
+    return ordered.filter((c) => !q || c.name.toLowerCase().includes(q));
+  }, [ordered, search]);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof list>();
@@ -84,11 +128,7 @@ function EditorPage() {
       arr.push(c);
       map.set(g, arr);
     }
-    return [...map.entries()].sort((a, b) => {
-      if (a[0] === "OTHER") return 1;
-      if (b[0] === "OTHER") return -1;
-      return a[0].localeCompare(b[0]);
-    });
+    return [...map.entries()];
   }, [list]);
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -97,7 +137,8 @@ function EditorPage() {
   const hiddenSet = new Set(hiddenDraft);
   const dirty =
     JSON.stringify([...hiddenDraft].sort()) !==
-    JSON.stringify([...getHidden(creds?.username, kind)].sort());
+      JSON.stringify([...getHidden(creds?.username, kind)].sort()) ||
+    !sameIds(orderDraft, getCategoryOrder(creds?.username, kind));
 
   const toggle = (id: string) => {
     setSaved(false);
@@ -113,6 +154,46 @@ function EditorPage() {
     });
   };
 
+  /** Move a single category one slot up/down inside its own group. */
+  const moveCategory = (id: string, dir: -1 | 1) => {
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
+      const group = groupOf(byId.get(id) ?? "");
+      const positions = prev
+        .map((cid, i) => ({ cid, i }))
+        .filter(({ cid }) => groupOf(byId.get(cid) ?? "") === group);
+      const at = positions.findIndex((p) => p.cid === id);
+      const target = positions[at + dir];
+      if (at < 0 || !target) return prev;
+      const next = [...prev];
+      const from = positions[at]!.i;
+      next[from] = target.cid;
+      next[target.i] = id;
+      return next;
+    });
+  };
+
+  /** Move a whole group block above/below its neighbouring group. */
+  const moveGroup = (group: string, dir: -1 | 1) => {
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
+      const blocks: { key: string; ids: string[] }[] = [];
+      for (const cid of prev) {
+        const g = groupOf(byId.get(cid) ?? "");
+        const last = blocks[blocks.length - 1];
+        if (last && last.key === g) last.ids.push(cid);
+        else blocks.push({ key: g, ids: [cid] });
+      }
+      const at = blocks.findIndex((b) => b.key === group);
+      const swapWith = at + dir;
+      if (at < 0 || swapWith < 0 || swapWith >= blocks.length) return prev;
+      const next = [...blocks];
+      [next[at], next[swapWith]] = [next[swapWith]!, next[at]!];
+      return next.flatMap((b) => b.ids);
+    });
+  };
 
   const showAll = () => {
     setSaved(false);
@@ -124,8 +205,22 @@ function EditorPage() {
     setHiddenDraft((categories.data ?? []).map((c) => c.id));
   };
 
+  const resetOrder = () => {
+    setSaved(false);
+    const rank = (name: string) => {
+      const g = groupOf(name);
+      return g === "OTHER" ? "\uffff" : g;
+    };
+    setOrderDraft(
+      [...(categories.data ?? [])]
+        .sort((a, b) => rank(a.name).localeCompare(rank(b.name)))
+        .map((c) => c.id),
+    );
+  };
+
   const save = () => {
     setHidden(creds?.username, kind, hiddenDraft);
+    setCategoryOrder(creds?.username, kind, orderDraft);
     setSaved(true);
   };
 
@@ -137,8 +232,8 @@ function EditorPage() {
       <div>
         <h1 className="text-2xl font-semibold">Playlist editor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Uncheck the categories you don't want to see. Your choice is saved on this device and
-          applied everywhere in the player.
+          Uncheck the categories you don't want to see and use the arrows to reorder them. Your
+          choice is saved on this device and applied everywhere in the player.
         </p>
       </div>
 
@@ -181,12 +276,23 @@ function EditorPage() {
           >
             <EyeOff className="h-3.5 w-3.5" /> Hide all
           </button>
+          <button
+            onClick={resetOrder}
+            className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            Reset order
+          </button>
         </div>
 
         <div className="max-h-[55vh] overflow-y-auto p-2">
           {categories.isLoading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
           {categories.isError && (
             <p className="p-3 text-sm text-destructive">{(categories.error as Error).message}</p>
+          )}
+          {searching && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              Clear the search to reorder categories.
+            </p>
           )}
           {groups.map(([group, items]) => {
             const ids = items.map((c) => c.id);
@@ -196,6 +302,7 @@ function EditorPage() {
               <div key={group} className="mb-1 rounded-lg border border-border/60">
                 <div className="flex items-center gap-2 rounded-t-lg bg-secondary/40 px-2 py-2">
                   <button
+                    type="button"
                     onClick={() => setOpen((p) => ({ ...p, [group]: !expanded }))}
                     className="flex flex-1 items-center gap-2 text-left text-sm font-medium"
                   >
@@ -209,51 +316,79 @@ function EditorPage() {
                       {shownCount}/{items.length}
                     </span>
                   </button>
-                  <button
-                    onClick={() => setGroupVisible(ids, true)}
+                  {!searching && (
+                    <>
+                      <IconButton
+                        title={`Move ${group} up`}
+                        onClick={() => moveGroup(group, -1)}
+                        icon={<ChevronUp className="h-3.5 w-3.5" />}
+                      />
+                      <IconButton
+                        title={`Move ${group} down`}
+                        onClick={() => moveGroup(group, 1)}
+                        icon={<ChevronDown className="h-3.5 w-3.5" />}
+                      />
+                    </>
+                  )}
+                  <IconButton
                     title={`Show all ${group}`}
-                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setGroupVisible(ids, false)}
+                    onClick={() => setGroupVisible(ids, true)}
+                    icon={<Eye className="h-3.5 w-3.5" />}
+                  />
+                  <IconButton
                     title={`Hide all ${group}`}
-                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  >
-                    <EyeOff className="h-3.5 w-3.5" />
-                  </button>
+                    onClick={() => setGroupVisible(ids, false)}
+                    icon={<EyeOff className="h-3.5 w-3.5" />}
+                  />
                 </div>
                 {expanded && (
                   <div className="p-1">
                     {items.map((c) => {
                       const shown = !hiddenSet.has(c.id);
                       return (
-                        <button
+                        <div
                           key={c.id}
-                          type="button"
-                          role="checkbox"
-                          aria-checked={shown}
-                          onClick={() => toggle(c.id)}
-                          className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
+                          className="flex items-center gap-1 rounded-md pr-1 hover:bg-secondary"
                         >
-                          <span
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                              shown
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border"
-                            }`}
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={shown}
+                            onClick={() => toggle(c.id)}
+                            className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm"
                           >
-                            {shown && <Check className="h-3 w-3" />}
-                          </span>
-                          <span
-                            className={
-                              shown ? "text-foreground" : "text-muted-foreground line-through"
-                            }
-                          >
-                            {c.name}
-                          </span>
-                        </button>
+                            <span
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                shown
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border"
+                              }`}
+                            >
+                              {shown && <Check className="h-3 w-3" />}
+                            </span>
+                            <span
+                              className={`truncate ${
+                                shown ? "text-foreground" : "text-muted-foreground line-through"
+                              }`}
+                            >
+                              {c.name}
+                            </span>
+                          </button>
+                          {!searching && (
+                            <>
+                              <IconButton
+                                title="Move up"
+                                onClick={() => moveCategory(c.id, -1)}
+                                icon={<ChevronUp className="h-3.5 w-3.5" />}
+                              />
+                              <IconButton
+                                title="Move down"
+                                onClick={() => moveCategory(c.id, 1)}
+                                icon={<ChevronDown className="h-3.5 w-3.5" />}
+                              />
+                            </>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -284,5 +419,27 @@ function EditorPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function IconButton({
+  title,
+  onClick,
+  icon,
+}: {
+  title: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+    >
+      {icon}
+    </button>
   );
 }
