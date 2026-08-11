@@ -302,8 +302,8 @@ function EditorPage() {
       <div>
         <h1 className="text-2xl font-semibold">Playlist editor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Uncheck the categories you don't want to see and use the arrows to reorder them. Your
-          choice is saved on this device and applied everywhere in the player.
+          Uncheck the categories you don't want to see, then reorder with the arrows or by dragging
+          the grip handle. Your choice is saved on this device and applied everywhere in the player.
         </p>
       </div>
 
