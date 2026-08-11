@@ -177,23 +177,57 @@ function EditorPage() {
     });
   };
 
-  /** Move a single category one slot up/down inside its own group. */
-  const moveCategory = (id: string, dir: -1 | 1) => {
+  /** Split the current order into one contiguous block per group (first-appearance order). */
+  const buildBlocks = (prev: string[]) => {
+    const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
+    const blocks: { key: string; ids: string[] }[] = [];
+    const index = new Map<string, number>();
+    for (const cid of prev) {
+      const g = groupOf(byId.get(cid) ?? "");
+      const at = index.get(g);
+      if (at === undefined) {
+        index.set(g, blocks.length);
+        blocks.push({ key: g, ids: [cid] });
+      } else {
+        blocks[at]!.ids.push(cid);
+      }
+    }
+    return blocks;
+  };
+
+  /** Swap two category ids inside the saved order. */
+  const swapCategories = (a: string, b: string) => {
     setSaved(false);
     setOrderDraft((prev) => {
-      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
-      const group = groupOf(byId.get(id) ?? "");
-      const positions = prev
-        .map((cid, i) => ({ cid, i }))
-        .filter(({ cid }) => groupOf(byId.get(cid) ?? "") === group);
-      const at = positions.findIndex((p) => p.cid === id);
-      const target = positions[at + dir];
-      if (at < 0 || !target) return prev;
+      const ia = prev.indexOf(a);
+      const ib = prev.indexOf(b);
+      if (ia < 0 || ib < 0) return prev;
       const next = [...prev];
-      const from = positions[at]!.i;
-      next[from] = target.cid;
-      next[target.i] = id;
+      next[ia] = b;
+      next[ib] = a;
       return next;
+    });
+  };
+
+  /** Move a category one slot up/down relative to what is displayed in its group. */
+  const moveCategory = (id: string, dir: -1 | 1, siblings: string[]) => {
+    const at = siblings.indexOf(id);
+    const target = siblings[at + dir];
+    if (at < 0 || !target) return;
+    swapCategories(id, target);
+  };
+
+  /** Drag a category and drop it onto another one (inserts at that spot). */
+  const dropCategory = (dragId: string, overId: string) => {
+    if (dragId === overId) return;
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const without = prev.filter((x) => x !== dragId);
+      const at = without.indexOf(overId);
+      if (at < 0) return prev;
+      const before = prev.indexOf(dragId) > prev.indexOf(overId);
+      without.splice(before ? at : at + 1, 0, dragId);
+      return without;
     });
   };
 
@@ -201,14 +235,7 @@ function EditorPage() {
   const moveGroup = (group: string, dir: -1 | 1) => {
     setSaved(false);
     setOrderDraft((prev) => {
-      const byId = new Map((categories.data ?? []).map((c) => [c.id, c.name]));
-      const blocks: { key: string; ids: string[] }[] = [];
-      for (const cid of prev) {
-        const g = groupOf(byId.get(cid) ?? "");
-        const last = blocks[blocks.length - 1];
-        if (last && last.key === g) last.ids.push(cid);
-        else blocks.push({ key: g, ids: [cid] });
-      }
+      const blocks = buildBlocks(prev);
       const at = blocks.findIndex((b) => b.key === group);
       const swapWith = at + dir;
       if (at < 0 || swapWith < 0 || swapWith >= blocks.length) return prev;
@@ -217,6 +244,23 @@ function EditorPage() {
       return next.flatMap((b) => b.ids);
     });
   };
+
+  /** Drag a group header and drop it onto another group. */
+  const dropGroup = (dragKey: string, overKey: string) => {
+    if (dragKey === overKey) return;
+    setSaved(false);
+    setOrderDraft((prev) => {
+      const blocks = buildBlocks(prev);
+      const from = blocks.findIndex((b) => b.key === dragKey);
+      const to = blocks.findIndex((b) => b.key === overKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...blocks];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next.flatMap((b) => b.ids);
+    });
+  };
+
 
   const showAll = () => {
     setSaved(false);
