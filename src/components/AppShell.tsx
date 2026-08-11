@@ -12,12 +12,13 @@ const tabs = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { creds, ready, logout } = useXtreamAuth();
+  const { creds, profile, profiles, ready, logout, selectProfile } = useXtreamAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (ready && !creds) void navigate({ to: "/" });
   }, [ready, creds, navigate]);
+
 
   if (!ready || !creds) {
     return (
