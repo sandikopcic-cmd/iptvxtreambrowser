@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import {
   parseAccount,
   parseCategories,
@@ -11,12 +10,7 @@ import {
   parseVodDetail,
   xtreamApi,
 } from "./xtream.server";
-
-const credsSchema = z.object({
-  server: z.string().min(3).max(300),
-  username: z.string().min(1).max(200),
-  password: z.string().min(1).max(200),
-});
+import { credsSchema } from "./xtream-schemas";
 
 export const xtreamLogin = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => credsSchema.parse(input))
@@ -24,7 +18,7 @@ export const xtreamLogin = createServerFn({ method: "POST" })
 
 export const xtreamCategories = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    credsSchema.extend({ kind: z.enum(["live", "vod", "series"]) }).parse(input),
+    credsSchema.extend({ kind: liveVodSeries }).parse(input),
   )
   .handler(async ({ data }) =>
     parseCategories(await xtreamApi(data, { action: `get_${data.kind}_categories` })),
