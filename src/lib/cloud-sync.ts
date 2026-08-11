@@ -46,6 +46,15 @@ function apply(data: Snapshot) {
   }
 }
 
+/** Order-insensitive serialisation so key ordering never looks like a change. */
+function canonical(data: Snapshot): string {
+  return JSON.stringify(
+    Object.keys(data)
+      .sort()
+      .map((k) => [k, data[k]]),
+  );
+}
+
 function isEmpty(data: Snapshot | null | undefined) {
   if (!data) return true;
   const profiles = data["xtream.profiles"];
@@ -116,15 +125,20 @@ export function useCloudSync(): CloudSyncState {
       if (isEmpty(remote) && !isEmpty(local)) {
         // First sign-in on a device that already has playlists: upload them.
         await push(userId, local);
-        last = JSON.stringify(local);
-      } else if (remote && JSON.stringify(remote) !== JSON.stringify(local)) {
+        last = canonical(local);
+      } else if (remote && canonical(remote) !== canonical(local)) {
         apply(remote);
-        last = JSON.stringify(remote);
+        last = canonical(snapshot());
         setStatus("synced");
-        window.location.reload();
+        // Reload once so mounted views pick up the pulled setup — never loop.
+        const flag = `xtream.synced.${userId}`;
+        if (window.sessionStorage.getItem(flag) !== "1") {
+          window.sessionStorage.setItem(flag, "1");
+          window.location.reload();
+        }
         return;
       } else {
-        last = JSON.stringify(local);
+        last = canonical(local);
       }
       if (!cancelled) setStatus("synced");
     };
@@ -134,10 +148,11 @@ export function useCloudSync(): CloudSyncState {
     // Push local changes (new playlist, favourite, reorder) up shortly after.
     const timer = window.setInterval(() => {
       if (cancelled) return;
-      const current = JSON.stringify(snapshot());
+      const next = snapshot();
+      const current = canonical(next);
       if (current === last) return;
       last = current;
-      void push(userId, JSON.parse(current) as Snapshot);
+      void push(userId, next);
     }, 4000);
 
     return () => {
