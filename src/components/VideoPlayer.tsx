@@ -61,7 +61,7 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         );
         player.attachMediaElement(video);
         player.load();
-        void player.play().catch(() => undefined);
+        void Promise.resolve(player.play()).catch(() => undefined);
       } catch {
         if (!cancelled) fail("This stream could not be played in the browser.");
       }
