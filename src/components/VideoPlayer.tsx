@@ -2,6 +2,7 @@ import Hls from "hls.js";
 import { Bug, Check, Info, Loader2, Maximize, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { toProxyUrl } from "@/lib/stream-url";
 
 type Props = {
   src: string;
@@ -42,7 +43,7 @@ function qualityLabel(height: number) {
   return `${height}p`;
 }
 
-export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
+export default function VideoPlayer({ src: rawSrc, fallbackSrc: rawFallbackSrc, title, poster }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -58,6 +59,27 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
   const [report, setReport] = useState<PlaybackReport | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [stats, setStats] = useState<StreamStats | null>(null);
+  // When a direct provider URL cannot be reached from the browser (CORS or
+  // mixed content on an https page), retry the same stream via the relay.
+  const [viaProxy, setViaProxy] = useState(false);
+
+  const resolve = useCallback(
+    (url?: string) => {
+      if (!url) return url;
+      if (!/^https?:\/\//i.test(url)) return url;
+      const mixed =
+        typeof window !== "undefined" &&
+        window.location.protocol === "https:" &&
+        /^http:\/\//i.test(url);
+      return viaProxy || mixed ? toProxyUrl(url) : url;
+    },
+    [viaProxy],
+  );
+
+  const src = resolve(rawSrc) as string;
+  const fallbackSrc = resolve(rawFallbackSrc);
+  const canRetryViaProxy = !viaProxy && /^https?:\/\//i.test(rawSrc);
+
 
   const readStats = useCallback((): StreamStats | null => {
     const video = videoRef.current;
@@ -158,10 +180,17 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
     video.addEventListener("loadeddata", onLoaded);
 
     const fail = (msg: string, stage = "player", detail = msg) => {
+      // Direct connection to the provider failed in the browser (CORS, mixed
+      // content or a refused connection) — try the same stream via the relay.
+      if (canRetryViaProxy) {
+        setViaProxy(true);
+        return;
+      }
       setLoading(false);
       setError(msg);
       recordFailure(stage, detail);
     };
+
 
     // Watchdog: if nothing has started playing after a while, stop the endless
     // spinner and let the user retry (usually the provider stalled or the
@@ -299,7 +328,13 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
       video.load();
     };
 
-  }, [src, fallbackSrc, attempt]);
+  }, [src, fallbackSrc, attempt, canRetryViaProxy]);
+
+  // A new stream starts in whatever mode the user picked (Direct by default).
+  useEffect(() => {
+    setViaProxy(false);
+  }, [rawSrc]);
+
 
   const toggle = () => {
     const video = videoRef.current;
