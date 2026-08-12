@@ -31,11 +31,9 @@ export function setDirectPlay(value: boolean) {
   window.dispatchEvent(new Event("xtream-direct-play"));
 }
 
-export function proxied(absoluteUrl: string): string {
-  // Direct mode: the device connects straight to the IPTV provider, so the
-  // provider sees your own IP instead of the hosting IP (fixes HTTP 458).
-  if (isDirectPlay()) return absoluteUrl;
-
+/** Always routes through this site's relay, regardless of Direct mode. */
+export function toProxyUrl(absoluteUrl: string): string {
+  if (!/^https?:\/\//i.test(absoluteUrl)) return absoluteUrl;
   let format = "";
   try {
     const pathname = new URL(absoluteUrl).pathname;
@@ -44,10 +42,17 @@ export function proxied(absoluteUrl: string): string {
   } catch {
     format = "";
   }
-
   const formatParam = format ? `&format=${encodeURIComponent(format)}` : "";
   return `/api/public/stream?u=${toBase64Url(absoluteUrl)}${formatParam}`;
 }
+
+export function proxied(absoluteUrl: string): string {
+  // Direct mode: the device connects straight to the IPTV provider, so the
+  // provider sees your own IP instead of the hosting IP (fixes HTTP 458).
+  if (isDirectPlay()) return absoluteUrl;
+  return toProxyUrl(absoluteUrl);
+}
+
 
 export function liveStreamUrl(creds: XtreamCreds, streamId: string, hls = true): string {
   const base = normalizeServerUrl(creds.server);
