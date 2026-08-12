@@ -42,7 +42,7 @@ function qualityLabel(height: number) {
   return `${height}p`;
 }
 
-export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) {
+export default function VideoPlayer({ src: rawSrc, fallbackSrc: rawFallbackSrc, title, poster }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -58,6 +58,27 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
   const [report, setReport] = useState<PlaybackReport | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [stats, setStats] = useState<StreamStats | null>(null);
+  // When a direct provider URL cannot be reached from the browser (CORS or
+  // mixed content on an https page), retry the same stream via the relay.
+  const [viaProxy, setViaProxy] = useState(false);
+
+  const resolve = useCallback(
+    (url?: string) => {
+      if (!url) return url;
+      if (!/^https?:\/\//i.test(url)) return url;
+      const mixed =
+        typeof window !== "undefined" &&
+        window.location.protocol === "https:" &&
+        /^http:\/\//i.test(url);
+      return viaProxy || mixed ? toProxyUrl(url) : url;
+    },
+    [viaProxy],
+  );
+
+  const src = resolve(rawSrc) as string;
+  const fallbackSrc = resolve(rawFallbackSrc);
+  const canRetryViaProxy = !viaProxy && /^https?:\/\//i.test(rawSrc);
+
 
   const readStats = useCallback((): StreamStats | null => {
     const video = videoRef.current;
