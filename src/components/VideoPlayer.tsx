@@ -180,10 +180,17 @@ export default function VideoPlayer({ src: rawSrc, fallbackSrc: rawFallbackSrc, 
     video.addEventListener("loadeddata", onLoaded);
 
     const fail = (msg: string, stage = "player", detail = msg) => {
+      // Direct connection to the provider failed in the browser (CORS, mixed
+      // content or a refused connection) — try the same stream via the relay.
+      if (canRetryViaProxy) {
+        setViaProxy(true);
+        return;
+      }
       setLoading(false);
       setError(msg);
       recordFailure(stage, detail);
     };
+
 
     // Watchdog: if nothing has started playing after a while, stop the endless
     // spinner and let the user retry (usually the provider stalled or the
