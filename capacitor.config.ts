@@ -1,23 +1,15 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-/**
- * Android / Fire TV (Firestick) build.
- *
- * The app is a full-stack web app (its stream proxy and Xtream API calls run
- * on the server), so the native shell loads the published site instead of a
- * static bundle. Point `server.url` at your own published URL if it changes.
- */
 const config: CapacitorConfig = {
-  appId: "app.lovable.streamdeck",
-  appName: "Streamdeck IPTV",
-  webDir: "dist/client",
-  android: {
-    allowMixedContent: true,
-  },
+  appId: "com.xtream.player",
+  appName: "Xtream Player",
+  webDir: "dist",
   server: {
-    url: "https://iptvxtreambrowser.lovable.app",
+    // KLJUČNO: Androidu pove, naj ne blokira http:// video streamov.
     cleartext: true,
-    androidScheme: "https",
+  },
+  android: {
+    allowMixedContent: true, // Dovoljuje mešanje https strani in http videa
   },
 };
 
