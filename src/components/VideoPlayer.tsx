@@ -328,7 +328,13 @@ export default function VideoPlayer({ src: rawSrc, fallbackSrc: rawFallbackSrc, 
       video.load();
     };
 
-  }, [src, fallbackSrc, attempt]);
+  }, [src, fallbackSrc, attempt, canRetryViaProxy]);
+
+  // A new stream starts in whatever mode the user picked (Direct by default).
+  useEffect(() => {
+    setViaProxy(false);
+  }, [rawSrc]);
+
 
   const toggle = () => {
     const video = videoRef.current;
