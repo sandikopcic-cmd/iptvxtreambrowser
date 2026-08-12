@@ -202,7 +202,9 @@ export default function VideoPlayer({ src, fallbackSrc, title, poster }: Props) 
         }
         const player = mpegts.createPlayer(
           { type: "mpegts", url, isLive: true, hasAudio: true, hasVideo: true },
-          { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false },
+          // enableWorker must stay false: the bundled worker is created from a
+          // blob URL and throws "is not a constructor", which kills playback.
+          { enableWorker: false, liveBufferLatencyChasing: true, lazyLoad: false },
         );
         tsPlayer = player;
         tsPlayerRef.current = player;
