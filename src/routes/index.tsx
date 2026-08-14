@@ -1,7 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, MonitorPlay, Pencil, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Eye,
+  EyeOff,
+  Loader2,
+  MonitorPlay,
+  Pencil,
+  Play,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
 import { importM3u } from "@/lib/m3u.functions";
