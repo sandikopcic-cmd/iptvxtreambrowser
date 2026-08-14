@@ -40,10 +40,34 @@ export const Route = createFileRoute("/")({
   component: LoginPage,
 });
 
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={`Copy ${label}`}
+      title={`Copy ${label}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          /* ignore */
+        }
+        setDone(true);
+        setTimeout(() => setDone(false), 1200);
+      }}
+      className="shrink-0 rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+    >
+      {done ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+    </button>
+  );
+}
+
 function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile, updateProfile } = useXtreamAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
   const [draft, setDraft] = useState({ name: "", server: "", username: "", password: "" });
   const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
