@@ -106,10 +106,10 @@ function LoginPage() {
                       e.preventDefault();
                       updateProfile(p.id, {
                         name: draft.name,
+                        server: draft.server,
                         ...(p.kind === "m3u"
                           ? {}
                           : {
-                              server: draft.server,
                               username: draft.username,
                               ...(draft.password ? { password: draft.password } : {}),
                             }),
@@ -124,15 +124,25 @@ function LoginPage() {
                       placeholder="Playlist name"
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
                     />
+                    <input
+                      aria-label={p.kind === "m3u" ? "M3U playlist URL" : "Server URL"}
+                      value={draft.server}
+                      onChange={(e) => setDraft({ ...draft, server: e.target.value })}
+                      placeholder={
+                        p.kind === "m3u"
+                          ? "http://example.com/get.php?…&type=m3u_plus"
+                          : "http://example.com:8080"
+                      }
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                    />
+                    {p.kind === "m3u" && (
+                      <p className="text-xs text-muted-foreground">
+                        Changing the M3U link updates the saved source; re-add the playlist to
+                        refresh its channels.
+                      </p>
+                    )}
                     {p.kind !== "m3u" && (
                       <>
-                        <input
-                          aria-label="Server URL"
-                          value={draft.server}
-                          onChange={(e) => setDraft({ ...draft, server: e.target.value })}
-                          placeholder="http://example.com:8080"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-                        />
                         <input
                           aria-label="Username"
                           value={draft.username}
