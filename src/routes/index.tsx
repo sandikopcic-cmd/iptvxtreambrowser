@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, MonitorPlay, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Loader2, MonitorPlay, Pencil, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
 import { importM3u } from "@/lib/m3u.functions";
@@ -29,7 +29,9 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
+  const { creds, ready, profiles, selectProfile, removeProfile, updateProfile } = useXtreamAuth();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ name: "", server: "", username: "", password: "" });
   const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
   const loadM3u = useServerFn(importM3u);
