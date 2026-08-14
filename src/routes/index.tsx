@@ -1,7 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, MonitorPlay, Pencil, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Eye,
+  EyeOff,
+  Loader2,
+  MonitorPlay,
+  Pencil,
+  Play,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
 import { importM3u } from "@/lib/m3u.functions";
@@ -27,10 +40,34 @@ export const Route = createFileRoute("/")({
   component: LoginPage,
 });
 
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={`Copy ${label}`}
+      title={`Copy ${label}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          /* ignore */
+        }
+        setDone(true);
+        setTimeout(() => setDone(false), 1200);
+      }}
+      className="shrink-0 rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+    >
+      {done ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+    </button>
+  );
+}
+
 function LoginPage() {
   const navigate = useNavigate();
   const { creds, ready, profiles, selectProfile, removeProfile, updateProfile } = useXtreamAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
   const [draft, setDraft] = useState({ name: "", server: "", username: "", password: "" });
   const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
@@ -124,17 +161,20 @@ function LoginPage() {
                       placeholder="Playlist name"
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
                     />
-                    <input
-                      aria-label={p.kind === "m3u" ? "M3U playlist URL" : "Server URL"}
-                      value={draft.server}
-                      onChange={(e) => setDraft({ ...draft, server: e.target.value })}
-                      placeholder={
-                        p.kind === "m3u"
-                          ? "http://example.com/get.php?…&type=m3u_plus"
-                          : "http://example.com:8080"
-                      }
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        aria-label={p.kind === "m3u" ? "M3U playlist URL" : "Server URL"}
+                        value={draft.server}
+                        onChange={(e) => setDraft({ ...draft, server: e.target.value })}
+                        placeholder={
+                          p.kind === "m3u"
+                            ? "http://example.com/get.php?…&type=m3u_plus"
+                            : "http://example.com:8080"
+                        }
+                        className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                      />
+                      <CopyButton value={draft.server} label="URL" />
+                    </div>
                     {p.kind === "m3u" && (
                       <p className="text-xs text-muted-foreground">
                         Changing the M3U link updates the saved source; re-add the playlist to
@@ -143,23 +183,56 @@ function LoginPage() {
                     )}
                     {p.kind !== "m3u" && (
                       <>
-                        <input
-                          aria-label="Username"
-                          value={draft.username}
-                          onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-                          placeholder="Username"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-                        />
-                        <input
-                          aria-label="New password"
-                          type="password"
-                          value={draft.password}
-                          onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-                          placeholder="New password (leave empty to keep)"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            aria-label="Username"
+                            value={draft.username}
+                            onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                            placeholder="Username"
+                            className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                          />
+                          <CopyButton value={draft.username} label="username" />
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            aria-label="Password"
+                            type={showSecret ? "text" : "password"}
+                            value={draft.password}
+                            onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                            placeholder="Password"
+                            className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                          />
+                          <button
+                            type="button"
+                            aria-label={showSecret ? "Hide password" : "Show password"}
+                            onClick={() => setShowSecret((v) => !v)}
+                            className="shrink-0 rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          >
+                            {showSecret ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                          <CopyButton value={draft.password} label="password" />
+                        </div>
                       </>
                     )}
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2">
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">
+                        {p.kind === "m3u"
+                          ? draft.server
+                          : `${draft.server.replace(/\/+$/, "")}/get.php?username=${encodeURIComponent(draft.username)}&password=${encodeURIComponent(draft.password)}&type=m3u_plus&output=ts`}
+                      </span>
+                      <CopyButton
+                        value={
+                          p.kind === "m3u"
+                            ? draft.server
+                            : `${draft.server.replace(/\/+$/, "")}/get.php?username=${encodeURIComponent(draft.username)}&password=${encodeURIComponent(draft.password)}&type=m3u_plus&output=ts`
+                        }
+                        label="full M3U link"
+                      />
+                    </div>
                     <div className="flex gap-2">
                       <button
                         type="submit"
@@ -199,11 +272,12 @@ function LoginPage() {
                       aria-label={`Edit ${p.name}`}
                       onClick={() => {
                         setEditingId(p.id);
+                        setShowSecret(false);
                         setDraft({
                           name: p.name,
                           server: p.server,
                           username: p.username,
-                          password: "",
+                          password: p.password,
                         });
                       }}
                       className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
