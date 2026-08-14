@@ -220,5 +220,6 @@ export function useXtreamAuth() {
     selectProfile,
     removeProfile,
     renameProfile,
+    updateProfile,
   };
 }
