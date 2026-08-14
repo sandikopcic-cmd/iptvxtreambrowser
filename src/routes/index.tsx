@@ -272,11 +272,12 @@ function LoginPage() {
                       aria-label={`Edit ${p.name}`}
                       onClick={() => {
                         setEditingId(p.id);
+                        setShowSecret(false);
                         setDraft({
                           name: p.name,
                           server: p.server,
                           username: p.username,
-                          password: "",
+                          password: p.password,
                         });
                       }}
                       className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
