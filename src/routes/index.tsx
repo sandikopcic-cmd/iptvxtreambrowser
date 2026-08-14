@@ -106,10 +106,10 @@ function LoginPage() {
                       e.preventDefault();
                       updateProfile(p.id, {
                         name: draft.name,
+                        server: draft.server,
                         ...(p.kind === "m3u"
                           ? {}
                           : {
-                              server: draft.server,
                               username: draft.username,
                               ...(draft.password ? { password: draft.password } : {}),
                             }),
