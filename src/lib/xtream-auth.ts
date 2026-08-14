@@ -163,6 +163,30 @@ export function renameProfile(id: string, name: string) {
   });
 }
 
+/** Update a saved playlist (name and, for Xtream playlists, credentials). */
+export function updateProfile(
+  id: string,
+  patch: { name?: string; server?: string; username?: string; password?: string },
+) {
+  const state = current();
+  persist({
+    ...state,
+    profiles: state.profiles.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            ...(patch.name !== undefined ? { name: patch.name.trim() || p.name } : {}),
+            ...(patch.server !== undefined ? { server: patch.server.trim() || p.server } : {}),
+            ...(patch.username !== undefined
+              ? { username: patch.username.trim() || p.username }
+              : {}),
+            ...(patch.password !== undefined ? { password: patch.password } : {}),
+          }
+        : p,
+    ),
+  });
+}
+
 /** Deselect the active playlist (keeps saved playlists). */
 export function clearCreds() {
   persist({ ...current(), activeId: null });
@@ -196,5 +220,6 @@ export function useXtreamAuth() {
     selectProfile,
     removeProfile,
     renameProfile,
+    updateProfile,
   };
 }

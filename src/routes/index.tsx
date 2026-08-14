@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, MonitorPlay, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Loader2, MonitorPlay, Pencil, Play, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { xtreamLogin } from "@/lib/xtream.functions";
 import { importM3u } from "@/lib/m3u.functions";
@@ -29,7 +29,9 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { creds, ready, profiles, selectProfile, removeProfile } = useXtreamAuth();
+  const { creds, ready, profiles, selectProfile, removeProfile, updateProfile } = useXtreamAuth();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ name: "", server: "", username: "", password: "" });
   const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
   const loadM3u = useServerFn(importM3u);
@@ -96,34 +98,117 @@ function LoginPage() {
         {hasProfiles && (
           <ul className="mb-4 space-y-2">
             {profiles.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-              >
-                <button
-                  onClick={() => {
-                    selectProfile(p.id);
-                    void navigate({ to: "/live" });
-                  }}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-                    <Play className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{p.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {p.server} · {p.username}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  aria-label={`Remove ${p.name}`}
-                  onClick={() => removeProfile(p.id)}
-                  className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+              <li key={p.id} className="rounded-xl border border-border bg-card p-3">
+                {editingId === p.id ? (
+                  <form
+                    className="space-y-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      updateProfile(p.id, {
+                        name: draft.name,
+                        ...(p.kind === "m3u"
+                          ? {}
+                          : {
+                              server: draft.server,
+                              username: draft.username,
+                              ...(draft.password ? { password: draft.password } : {}),
+                            }),
+                      });
+                      setEditingId(null);
+                    }}
+                  >
+                    <input
+                      aria-label="Playlist name"
+                      value={draft.name}
+                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                      placeholder="Playlist name"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                    />
+                    {p.kind !== "m3u" && (
+                      <>
+                        <input
+                          aria-label="Server URL"
+                          value={draft.server}
+                          onChange={(e) => setDraft({ ...draft, server: e.target.value })}
+                          placeholder="http://example.com:8080"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                        />
+                        <input
+                          aria-label="Username"
+                          value={draft.username}
+                          onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                          placeholder="Username"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                        />
+                        <input
+                          aria-label="New password"
+                          type="password"
+                          value={draft.password}
+                          onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                          placeholder="New password (leave empty to keep)"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                        />
+                      </>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="flex-1 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        selectProfile(p.id);
+                        void navigate({ to: "/live" });
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+                        <Play className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{p.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {p.server} · {p.username}
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      aria-label={`Edit ${p.name}`}
+                      onClick={() => {
+                        setEditingId(p.id);
+                        setDraft({
+                          name: p.name,
+                          server: p.server,
+                          username: p.username,
+                          password: "",
+                        });
+                      }}
+                      className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      aria-label={`Remove ${p.name}`}
+                      onClick={() => removeProfile(p.id)}
+                      className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
