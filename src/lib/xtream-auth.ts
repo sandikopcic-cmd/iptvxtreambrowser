@@ -119,6 +119,69 @@ export function saveCreds(creds: XtreamCreds, name?: string, epgUrl?: string): X
 
 const M3U_CHANNELS_PREFIX = "m3u.channels.";
 
+/** Session fallback when the browser storage quota is too small for a playlist. */
+const memoryChannels = new Map<string, M3uChannel[]>();
+
+type CompactChannel = [string, string, string, string, string, string];
+
+function encodeChannels(channels: M3uChannel[]): string {
+  const rows: CompactChannel[] = channels.map((c) => [
+    c.id,
+    c.name,
+    c.icon ?? "",
+    c.group,
+    c.epgChannelId ?? "",
+    c.url,
+  ]);
+  return JSON.stringify({ v: 2, rows });
+}
+
+function decodeChannels(raw: string): M3uChannel[] {
+  const parsed = JSON.parse(raw) as unknown;
+  if (Array.isArray(parsed)) return parsed as M3uChannel[];
+  const rows = (parsed as { rows?: CompactChannel[] } | null)?.rows;
+  if (!Array.isArray(rows)) return [];
+  return rows.map((r) => ({
+    id: r[0],
+    name: r[1],
+    icon: r[2] || null,
+    group: r[3],
+    epgChannelId: r[4] || null,
+    url: r[5],
+  }));
+}
+
+/** Try to persist channels; drops other cached playlists before giving up. */
+function persistChannels(id: string, channels: M3uChannel[]): boolean {
+  const key = M3U_CHANNELS_PREFIX + id;
+  const payload = encodeChannels(channels);
+  const attempt = () => {
+    window.localStorage.setItem(key, payload);
+    return true;
+  };
+  try {
+    return attempt();
+  } catch {
+    // Free space taken by other playlists, then retry once.
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(M3U_CHANNELS_PREFIX) && k !== key) stale.push(k);
+    }
+    stale.forEach((k) => window.localStorage.removeItem(k));
+    try {
+      return attempt();
+    } catch {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+      return false;
+    }
+  }
+}
+
 /** Save an imported M3U playlist (channels kept separately) and make it active. */
 export function saveM3uPlaylist(
   name: string,
@@ -138,7 +201,8 @@ export function saveM3uPlaylist(
     password: "",
     ...(epgUrl?.trim() ? { epgUrl: epgUrl.trim() } : {}),
   };
-  window.localStorage.setItem(M3U_CHANNELS_PREFIX + id, JSON.stringify(channels));
+  memoryChannels.set(id, channels);
+  persistChannels(id, channels);
   const profiles = existing
     ? state.profiles.map((p) => (p.id === id ? profile : p))
     : [...state.profiles, profile];
@@ -150,12 +214,13 @@ export function getM3uChannels(id: string): M3uChannel[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(M3U_CHANNELS_PREFIX + id);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-    return Array.isArray(parsed) ? (parsed as M3uChannel[]) : [];
+    if (raw) return decodeChannels(raw);
   } catch {
-    return [];
+    /* fall through to the in-memory copy */
   }
+  return memoryChannels.get(id) ?? [];
 }
+
 
 export function selectProfile(id: string) {
   const state = current();
