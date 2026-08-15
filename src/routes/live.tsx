@@ -9,6 +9,7 @@ import { liveStreamUrl, proxied } from "@/lib/stream-url";
 import { getM3uChannels, useXtreamAuth } from "@/lib/xtream-auth";
 import { sortByOrder, useCategoryOrder, useFavorites, useHiddenCategories } from "@/lib/playlist-prefs";
 import { xtreamCategories, xtreamLiveStreams, xtreamShortEpg } from "@/lib/xtream.functions";
+import { xmltvChannelEpg } from "@/lib/xmltv.functions";
 import type { Category, LiveChannel, M3uChannel } from "@/lib/xtream-types";
 import { epgMs, formatEpgTime, useEpgOffset } from "@/lib/epg-time";
 
@@ -38,6 +39,8 @@ function LivePage() {
   const getCategories = useServerFn(xtreamCategories);
   const getStreams = useServerFn(xtreamLiveStreams);
   const getEpg = useServerFn(xtreamShortEpg);
+  const getXmltvEpg = useServerFn(xmltvChannelEpg);
+  const epgUrl = profile?.epgUrl?.trim() || "";
 
   const { hidden, hiddenSet } = useHiddenCategories(creds?.username, "live");
   const { order, save: saveOrder } = useCategoryOrder(creds?.username, "live");
@@ -91,9 +94,19 @@ function LivePage() {
   const epg = useQuery({
     queryKey: ["epg", creds?.username, selected?.id],
     queryFn: () => getEpg({ data: { ...creds!, streamId: selected!.id } }),
-    enabled: !!creds && !!selected && !isM3u,
+    enabled: !!creds && !!selected && !isM3u && !epgUrl,
     staleTime: 60 * 1000,
   });
+
+  /** External XMLTV guide, matched on the channel's tvg-id. */
+  const xmltv = useQuery({
+    queryKey: ["xmltv-epg", epgUrl, selected?.epgChannelId],
+    queryFn: () => getXmltvEpg({ data: { url: epgUrl, channelId: selected!.epgChannelId! } }),
+    enabled: !!epgUrl && !!selected?.epgChannelId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const guide = epgUrl ? xmltv : epg;
 
   const categoryList = isM3u ? m3u.categories : (categories.data ?? []);
   const channelList = isM3u ? m3u.channels : (channels.data ?? []);
@@ -278,7 +291,7 @@ function LivePage() {
                 </button>
               </div>
               <div className="mt-3 space-y-3">
-                {(epg.data ?? []).slice(0, 4).map((e, i) => {
+                {(guide.data ?? []).slice(0, 4).map((e, i) => {
                   const start = epgMs(e.startTs, e.start);
                   const end = epgMs(e.endTs, e.end);
                   const shifted = epgOffset * 3600_000;
@@ -297,10 +310,14 @@ function LivePage() {
                     </div>
                   );
                 })}
-                {epg.data && epg.data.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No programme guide available.</p>
+                {guide.data && guide.data.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {epgUrl && !selected.epgChannelId
+                      ? "This channel has no EPG id to match in your XMLTV guide."
+                      : "No programme guide available."}
+                  </p>
                 )}
-                {epg.data && epg.data.length > 0 && (
+                {guide.data && guide.data.length > 0 && (
                   <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
                     <label htmlFor="epg-offset">Guide time shift</label>
                     <select
