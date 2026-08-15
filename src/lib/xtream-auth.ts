@@ -10,6 +10,8 @@ export type XtreamProfile = XtreamCreds & {
   name: string;
   /** "xtream" (default) uses the Xtream API; "m3u" plays a stored M3U channel list. */
   kind?: "xtream" | "m3u";
+  /** Optional external XMLTV guide URL used instead of the provider EPG. */
+  epgUrl?: string;
 };
 
 type State = { profiles: XtreamProfile[]; activeId: string | null };
@@ -87,7 +89,7 @@ function current(): State {
 }
 
 /** Add (or update, when server+username match) a playlist and make it active. */
-export function saveCreds(creds: XtreamCreds, name?: string): XtreamProfile {
+export function saveCreds(creds: XtreamCreds, name?: string, epgUrl?: string): XtreamProfile {
   const state = current();
   const existing = state.profiles.find(
     (p) => p.server === creds.server && p.username === creds.username,
@@ -95,10 +97,20 @@ export function saveCreds(creds: XtreamCreds, name?: string): XtreamProfile {
   let profile: XtreamProfile;
   let profiles: XtreamProfile[];
   if (existing) {
-    profile = { ...existing, ...creds, name: name?.trim() || existing.name };
+    profile = {
+      ...existing,
+      ...creds,
+      name: name?.trim() || existing.name,
+      ...(epgUrl !== undefined ? { epgUrl: epgUrl.trim() } : {}),
+    };
     profiles = state.profiles.map((p) => (p.id === existing.id ? profile : p));
   } else {
-    profile = { id: newId(), name: name?.trim() || creds.username, ...creds };
+    profile = {
+      id: newId(),
+      name: name?.trim() || creds.username,
+      ...creds,
+      ...(epgUrl?.trim() ? { epgUrl: epgUrl.trim() } : {}),
+    };
     profiles = [...state.profiles, profile];
   }
   persist({ profiles, activeId: profile.id });
@@ -112,6 +124,7 @@ export function saveM3uPlaylist(
   name: string,
   sourceUrl: string,
   channels: M3uChannel[],
+  epgUrl?: string,
 ): XtreamProfile {
   const state = current();
   const existing = state.profiles.find((p) => p.kind === "m3u" && p.server === sourceUrl);
@@ -123,6 +136,7 @@ export function saveM3uPlaylist(
     server: sourceUrl,
     username: `m3u:${id}`,
     password: "",
+    ...(epgUrl?.trim() ? { epgUrl: epgUrl.trim() } : {}),
   };
   window.localStorage.setItem(M3U_CHANNELS_PREFIX + id, JSON.stringify(channels));
   const profiles = existing
@@ -166,7 +180,13 @@ export function renameProfile(id: string, name: string) {
 /** Update a saved playlist (name and, for Xtream playlists, credentials). */
 export function updateProfile(
   id: string,
-  patch: { name?: string; server?: string; username?: string; password?: string },
+  patch: {
+    name?: string;
+    server?: string;
+    username?: string;
+    password?: string;
+    epgUrl?: string;
+  },
 ) {
   const state = current();
   persist({
@@ -181,6 +201,7 @@ export function updateProfile(
               ? { username: patch.username.trim() || p.username }
               : {}),
             ...(patch.password !== undefined ? { password: patch.password } : {}),
+            ...(patch.epgUrl !== undefined ? { epgUrl: patch.epgUrl.trim() } : {}),
           }
         : p,
     ),
