@@ -68,7 +68,13 @@ function LoginPage() {
   const { creds, ready, profiles, selectProfile, removeProfile, updateProfile } = useXtreamAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
-  const [draft, setDraft] = useState({ name: "", server: "", username: "", password: "" });
+  const [draft, setDraft] = useState({
+    name: "",
+    server: "",
+    username: "",
+    password: "",
+    epgUrl: "",
+  });
   const cloud = useCloudSync();
   const login = useServerFn(xtreamLogin);
   const loadM3u = useServerFn(importM3u);
@@ -79,6 +85,7 @@ function LoginPage() {
   const [server, setServer] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [epgUrl, setEpgUrl] = useState("");
 
   useEffect(() => {
     if (ready && creds) void navigate({ to: "/live" });
@@ -88,7 +95,7 @@ function LoginPage() {
     mutationFn: (input: { server: string; username: string; password: string }) =>
       login({ data: input }),
     onSuccess: (_account, input) => {
-      saveCreds(input, name);
+      saveCreds(input, name, epgUrl.trim());
       void navigate({ to: "/live" });
     },
   });
@@ -100,9 +107,10 @@ function LoginPage() {
         saveCreds(
           { server: result.server, username: result.username, password: result.password },
           name,
+          epgUrl.trim(),
         );
       } else {
-        saveM3uPlaylist(name || result.name, input.url, result.channels);
+        saveM3uPlaylist(name || result.name, input.url, result.channels, epgUrl.trim());
       }
       void navigate({ to: "/live" });
     },
@@ -144,6 +152,7 @@ function LoginPage() {
                       updateProfile(p.id, {
                         name: draft.name,
                         server: draft.server,
+                        epgUrl: draft.epgUrl,
                         ...(p.kind === "m3u"
                           ? {}
                           : {
@@ -218,6 +227,16 @@ function LoginPage() {
                         </div>
                       </>
                     )}
+                    <div className="flex gap-2">
+                      <input
+                        aria-label="EPG URL (XMLTV)"
+                        value={draft.epgUrl}
+                        onChange={(e) => setDraft({ ...draft, epgUrl: e.target.value })}
+                        placeholder="EPG URL (XMLTV, optional)"
+                        className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                      />
+                      <CopyButton value={draft.epgUrl} label="EPG URL" />
+                    </div>
                     <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2">
                       <span className="min-w-0 truncate text-xs text-muted-foreground">
                         {p.kind === "m3u"
@@ -278,6 +297,7 @@ function LoginPage() {
                           server: p.server,
                           username: p.username,
                           password: p.password,
+                          epgUrl: p.epgUrl ?? "",
                         });
                       }}
                       className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -435,6 +455,23 @@ function LoginPage() {
                 </div>
               </>
             )}
+
+            <div className="space-y-2">
+              <label htmlFor="epg-url" className="text-xs font-medium text-muted-foreground">
+                EPG URL (optional)
+              </label>
+              <input
+                id="epg-url"
+                value={epgUrl}
+                onChange={(e) => setEpgUrl(e.target.value)}
+                placeholder="http://example.com/xmltv.php?username=…&password=…"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                XMLTV guide (also .xml.gz). When set, it is used for the programme guide instead of
+                the provider EPG.
+              </p>
+            </div>
 
             {(mode === "m3u" ? m3uMutation.isError : mutation.isError) && (
               <p className="text-sm text-destructive">
